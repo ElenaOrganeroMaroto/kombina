@@ -2,6 +2,10 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
+app.get('/', (req, res) => {
+  res.json({ message: '¡API de Kombina funcionando correctamente en el Hito 1!' });
+});
+
 const userLogic = require('../logic/userLogic');
 
 // Ruta de registro
