@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Instalar dependencias limpias
+      - name: Instalar dependencias
         run: npm install
 
       - name: Ejecutar pruebas unitarias
-        run: npm run test
+        run: npx jest
