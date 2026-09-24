@@ -19,8 +19,10 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Instalar dependencias
-        run: npm install
+      - name: Instalar dependencias globales y locales
+        run: |
+          npm install
+          npm install -g jest
 
       - name: Ejecutar pruebas unitarias
-        run: npx jest
+        run: jest
