@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kombina - Registro</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <div>
+            <a href="index.html" style="text-decoration: none; color: #333;">&larr; Volver</a>
+            <h2>Crear cuenta</h2>
+        </div>
+
+        <div>
+            <input type="email" id="regEmail" placeholder="Correo electrónico" style="width:100%; padding:12px; margin-bottom:12px; box-sizing:border-box; border:1px solid #ddd; border-radius:8px;">
+            <input type="password" id="regPassword" placeholder="Contraseña" style="width:100%; padding:12px; margin-bottom:12px; box-sizing:border-box; border:1px solid #ddd; border-radius:8px;">
+            <button class="btn-primary" onclick="registerUser()">Registrarse</button>
+            <p id="mensaje" style="text-align: center; font-size: 0.9rem; margin-top: 15px;"></p>
+        </div>
+
+        <div></div>
+    </div>
+
+    <script src="/js/client.js"></script>
+</body>
+</html>
