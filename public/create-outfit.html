@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kombina - Crear Outfit</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <div class="content-scroll">
+            <h2 style="font-weight: 300; font-size: 1.4rem;">Crear outfit</h2>
+            
+            <div style="border: 2px dashed #dcd6ce; border-radius: 16px; height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 20px 0; background: #fbf9f5; cursor: pointer;">
+                <span style="font-size: 1.5rem; margin-bottom: 5px;">+</span>
+                <span style="font-size: 0.9rem; color: #666;">Añadir prendas</span>
+                <span style="font-size: 0.75rem; color: #999;">Selecciona las prendas de tu armario</span>
+            </div>
+
+            <h4 style="font-weight: 400; color: #444; margin-bottom: 10px;">Mi outfit</h4>
+            <div style="display: flex; gap: 10px; margin-bottom: 25px;">
+                <div style="width: 70px; height: 70px; background: #f0ece6; border-radius: 10px;"></div>
+                <div style="width: 70px; height: 70px; background: #f0ece6; border-radius: 10px;"></div>
+                <div style="width: 70px; height: 70px; background: #f0ece6; border-radius: 10px;"></div>
+            </div>
+
+            <button class="btn-primary">Generar outfit</button>
+        </div>
+
+        <!-- Contenedor donde se inyecta la barra de navegación automáticamente -->
+        <div id="bottom-nav-container"></div>
+    </div>
+
+    <script src="/js/layout.js"></script>
+</body>
+</html>
