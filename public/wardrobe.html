@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kombina - Mi Armario</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Cabecera -->
+        <div style="padding: 1.5rem 1.5rem 0.5rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="font-weight: 300; font-size: 1.5rem; margin: 0;">Mi armario</h2>
+            <div>
+                <span id="searchBtn" style="cursor: pointer; margin-right: 15px;" onclick="toggleSearch()">🔍</span>
+                <span style="cursor: pointer;" onclick="openAddModal()">➕</span>
+            </div>
+        </div>
+
+        <!-- Barra de búsqueda desplegable -->
+        <div id="searchContainer" style="padding: 0 1.5rem; display: none; margin-bottom: 10px;">
+            <input type="text" id="searchInput" placeholder="Buscar prenda..." oninput="filterWardrobe()" style="width: 100%; padding: 10px 12px; border: 1px solid #e0dad0; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box; background: #fbf9f5;">
+        </div>
+
+        <!-- Filtros horizontales superiores (Categorías) -->
+        <div style="display: flex; gap: 8px; overflow-x: auto; padding: 0 1.5rem 1rem 1.5rem; white-space: nowrap;" id="categoryChips">
+            <button class="chip active" onclick="filterByCategory('Todo', this)">Todo</button>
+            <button class="chip" onclick="filterByCategory('Tops', this)">Tops</button>
+            <button class="chip" onclick="filterByCategory('Pantalones', this)">Pantalones</button>
+            <button class="chip" onclick="filterByCategory('Faldas', this)">Faldas</button>
+            <button class="chip" onclick="filterByCategory('Vestidos', this)">Vestidos</button>
+        </div>
+
+        <!-- Contenido principal: Cuadrícula de prendas dinámica -->
+        <div class="content-scroll" style="padding-top: 0;">
+            <div id="wardrobeGrid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 0;">
+                <!-- Las prendas se renderizan aquí automáticamente -->
+            </div>
+        </div>
+
+        <!-- Navegación inferior fija -->
+        <div id="bottom-nav-container"></div>
+    </div>
+
+    <!-- Modal para añadir nueva prenda -->
+    <div id="addModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: white; padding: 24px; border-radius: 20px; width: 85%; max-width: 320px; box-sizing: border-box; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; font-weight: 450;">Añadir nueva prenda</h3>
+            
+            <!-- Campo para subir la foto de la prenda -->
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 0.85rem; color: #666; display: block; margin-bottom: 5px;">Foto de la prenda</label>
+                <input type="file" id="itemImageFile" accept="image/*" style="width: 100%; font-size: 0.85rem;">
+            </div>
+
+            <input type="text" id="itemName" placeholder="Ej. Camiseta básica blanca" style="width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #e0dad0; border-radius: 8px; box-sizing: border-box; background: #fbf9f5; font-size: 0.9rem;">
+            
+            <select id="itemCategory" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #e0dad0; border-radius: 8px; box-sizing: border-box; background: #fbf9f5; font-size: 0.9rem;">
+                <option value="Tops">Tops</option>
+                <option value="Pantalones">Pantalones</option>
+                <option value="Faldas">Faldas</option>
+                <option value="Vestidos">Vestidos</option>
+            </select>
+            
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-primary" onclick="addNewItem()" style="padding: 12px; flex: 1;">Guardar</button>
+                <button onclick="closeAddModal()" style="padding: 12px; background: #f0ece6; border: none; border-radius: 8px; cursor: pointer; flex: 1; font-weight: 500;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/client.js"></script>
+</body>
+</html>
