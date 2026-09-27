@@ -1,19 +1,25 @@
+const bcrypt = require('bcrypt');
 const userData = require('../data/userData');
 
-const registerUser = (userDataObj) => {
+const registerUser = async (userDataObj) => {
   const existing = userData.findUserByEmail(userDataObj.email);
   if (existing) {
     throw new Error('El correo electrónico ya está registrado.');
   }
+
+  // Hashear la contraseña de forma segura antes de guardarla
+  const hashedPassword = await bcrypt.hash(userDataObj.password, 10);
+
   const newUser = {
     ...userDataObj,
+    password: hashedPassword, // Guardamos el hash, NUNCA la contraseña en plano
     isActive: userDataObj.isActive ?? false,
     role: userDataObj.role || 'user'
   };
   return userData.addUser(newUser);
 };
 
-const loginUser = (email, password) => {
+const loginUser = async (email, password) => {
   const user = userData.findUserByEmail(email);
   if (!user) {
     throw new Error('Usuario no encontrado.');
@@ -21,9 +27,13 @@ const loginUser = (email, password) => {
   if (!user.isActive) {
     throw new Error('La cuenta está pendiente de confirmación por correo.');
   }
-  if (user.password !== password) {
+
+  // Comparar la contraseña introducida con el hash guardado en el objeto
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
     throw new Error('Contraseña incorrecta.');
   }
+
   return { message: 'Login exitoso', user };
 };
 
