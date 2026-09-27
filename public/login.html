@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kombina - Iniciar Sesión</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Contenido desplazable superior -->
+        <div class="content-scroll">
+            <a href="index.html" style="text-decoration: none; color: #777; font-size: 0.9rem;">&larr; Volver</a>
+            <h2 style="font-weight: 300; font-size: 1.8rem; margin-top: 20px; margin-bottom: 30px;">Iniciar sesión</h2>
+
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="email" id="logEmail" placeholder="Correo electrónico" style="width:100%; padding:14px; box-sizing:border-box; border:1px solid #e0dad0; border-radius:10px; background: #fbf9f5; font-size: 0.95rem;">
+                <input type="password" id="logPassword" placeholder="Contraseña" style="width:100%; padding:14px; box-sizing:border-box; border:1px solid #e0dad0; border-radius:10px; background: #fbf9f5; font-size: 0.95rem;">
+                <button class="btn-primary" onclick="loginUser()" style="margin-top: 10px;">Entrar</button>
+                <p id="mensajeLogin" style="text-align: center; font-size: 0.9rem; margin-top: 15px;"></p>
+            </div>
+        </div>
+
+        <div></div>
+    </div>
+
+    <script src="/js/client.js"></script>
+</body>
+</html>
