@@ -13,7 +13,7 @@ const registerUser = async (userDataObj) => {
   const newUser = {
     ...userDataObj,
     password: hashedPassword, // Guardamos el hash, NUNCA la contraseña en plano
-    isActive: userDataObj.isActive ?? false, //¡¡¡¡¡¡¡ HASTA Q SE PONGA LO DEL AVISO AL COREEO!!!!!
+    isActive: userDataObj.isActive ?? false, //¡¡¡¡¡¡¡ Poner a true para las pruebas!!!!!
     role: userDataObj.role || 'user'
   };
   return userData.addUser(newUser);
