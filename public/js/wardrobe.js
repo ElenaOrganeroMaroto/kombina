@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('wardrobeGrid')) {
         renderWardrobe();
         ensureItemModalExists();
+        migrateTrimExistingItems();  // recorta las prendas antiguas (solo una vez)
+        preloadBackgroundRemoval();  // precarga la IA en segundo plano
     }
 });
 
@@ -265,43 +267,287 @@ function closeAddModal() {
     document.getElementById('itemImageFile').value = '';
 }
 
+
+// --- CARGA DE LA LIBRERÍA DE QUITAR FONDO ---
+// Se prueban varias fuentes por orden (el +esm de jsDelivr falla con lodash)
+const BG_REMOVAL_URLS = [
+    'https://esm.sh/@imgly/background-removal@1.4.5',
+    'https://esm.sh/@imgly/background-removal@1.5.5',
+    'https://unpkg.com/@imgly/background-removal@1.4.5/dist/index.js?module'
+];
+
+async function getRemoveBackgroundFn() {
+    if (typeof window.removeBackground === 'function') return window.removeBackground;
+
+    let lastError = null;
+    for (const url of BG_REMOVAL_URLS) {
+        try {
+            const mod = await import(url);
+            const fn = mod.removeBackground || mod.default;
+            if (typeof fn === 'function') {
+                window.removeBackground = fn;
+                if (typeof mod.preload === 'function') window.preloadBackgroundModel = mod.preload;
+                return fn;
+            }
+        } catch (err) {
+            console.warn('No se pudo cargar la librería desde', url, err);
+            lastError = err;
+        }
+    }
+    throw lastError || new Error('No se pudo cargar la librería de quitar fondo.');
+}
+
+// Modelo "small": bastante más rápido y ligero, con calidad suficiente para prendas.
+// Si notas recortes peores, cambia 'small' por 'medium'.
+const BG_CONFIG = {
+    model: 'small',
+    output: { format: 'image/webp', quality: 0.85 } // ocupa menos en localStorage
+};
+
+// Descarga el código y los modelos al abrir la página, para que al guardar ya estén listos
+async function preloadBackgroundRemoval() {
+    try {
+        await getRemoveBackgroundFn();
+        if (typeof window.preloadBackgroundModel === 'function') {
+            await window.preloadBackgroundModel(BG_CONFIG);
+        }
+        console.log('[IA] Modelo precargado');
+    } catch (err) {
+        console.warn('[IA] No se pudo precargar (se intentará al guardar):', err);
+    }
+}
+
+// Recorta los márgenes transparentes: la prenda ocupa toda la imagen y encaja mejor en el outfit
+function trimTransparentPadding(source, pad = 0.02) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        const isBlob = source instanceof Blob;
+        const url = isBlob ? URL.createObjectURL(source) : source;
+        const fallback = () => {
+            if (isBlob) {
+                const r = new FileReader();
+                r.onload = (e) => resolve(e.target.result);
+                r.readAsDataURL(source);
+            } else {
+                resolve(source);
+            }
+        };
+        img.onload = () => {
+            if (isBlob) URL.revokeObjectURL(url);
+            try {
+                const w = img.naturalWidth, h = img.naturalHeight;
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(img, 0, 0);
+                const data = ctx.getImageData(0, 0, w, h).data;
+
+                let minX = w, minY = h, maxX = -1, maxY = -1;
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        if (data[(y * w + x) * 4 + 3] > 20) {
+                            if (x < minX) minX = x;
+                            if (x > maxX) maxX = x;
+                            if (y < minY) minY = y;
+                            if (y > maxY) maxY = y;
+                        }
+                    }
+                }
+                if (maxX < 0) return fallback(); // imagen totalmente transparente
+
+                const padX = Math.round((maxX - minX) * pad);
+                const padY = Math.round((maxY - minY) * pad);
+                minX = Math.max(0, minX - padX);
+                minY = Math.max(0, minY - padY);
+                maxX = Math.min(w - 1, maxX + padX);
+                maxY = Math.min(h - 1, maxY + padY);
+
+                const cw = maxX - minX + 1, ch = maxY - minY + 1;
+                const out = document.createElement('canvas');
+                out.width = cw; out.height = ch;
+                out.getContext('2d').drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+                resolve(out.toDataURL('image/webp', 0.85));
+            } catch (err) {
+                console.warn('No se pudo recortar la imagen:', err);
+                fallback();
+            }
+        };
+        img.onerror = () => { if (isBlob) URL.revokeObjectURL(url); fallback(); };
+        img.src = url;
+    });
+}
+
+// Recorta una sola vez las prendas (y outfits guardados) que ya tenías de antes
+async function migrateTrimExistingItems() {
+    if (localStorage.getItem('kombina_trimmed_v1')) return;
+    if (!wardrobeItems.length) { localStorage.setItem('kombina_trimmed_v1', '1'); return; }
+
+    try {
+        for (const item of wardrobeItems) {
+            if (item.image) item.image = await trimTransparentPadding(item.image);
+        }
+        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
+
+        const outfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
+        let changed = false;
+        outfits.forEach(o => {
+            if (!Array.isArray(o.items)) return;
+            o.items.forEach(it => {
+                const fresh = wardrobeItems.find(w => String(w.id) === String(it.id));
+                if (fresh && fresh.image) { it.image = fresh.image; changed = true; }
+            });
+        });
+        if (changed) localStorage.setItem('kombina_outfits', JSON.stringify(outfits));
+
+        localStorage.setItem('kombina_trimmed_v1', '1');
+        applyFilters();
+    } catch (err) {
+        console.warn('Migración de recorte omitida:', err);
+    }
+}
+
+// Reduce la foto antes de procesarla: una foto de móvil de 12 MP tarda mucho más que una de 768 px
+function downscaleImage(file, maxSize = 768) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            if (scale === 1) return resolve(file);
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', 0.92);
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+    });
+}
+
+function setSaveButtonLoading(isLoading) {
+    const btn = document.getElementById('saveItemBtn');
+    if (!btn) return;
+    btn.disabled = isLoading;
+    btn.style.opacity = isLoading ? '0.6' : '1';
+    btn.textContent = isLoading ? 'Procesando...' : 'Guardar';
+}
+
+function saveWardrobe() {
+    try {
+        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
+        return true;
+    } catch (err) {
+        console.error('No se pudo guardar en localStorage:', err);
+        alert('No hay espacio suficiente para guardar más prendas. Elimina alguna e inténtalo de nuevo.');
+        return false;
+    }
+}
+
+// --- COLA DE PROCESADO EN SEGUNDO PLANO ---
+// Al pulsar Guardar se cierra el modal al instante y la IA trabaja de fondo.
+// Las prendas se procesan de una en una para no saturar el móvil.
+let pendingItems = 0;
+let processingQueue = Promise.resolve();
+
+function updateProcessingBadge() {
+    let badge = document.getElementById('processingBadge');
+    if (pendingItems <= 0) {
+        if (badge) badge.remove();
+        return;
+    }
+    if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'processingBadge';
+        // Abajo, por encima de la barra de navegación (más arriba si está el botón "Terminar selección")
+        const bottom = document.getElementById('finishSelectionBtn') ? 200 : 145;
+        badge.style.cssText = 'position:fixed;bottom:' + bottom + 'px;left:50%;transform:translateX(-50%);z-index:1200;background:#111;color:#fff;padding:8px 16px;border-radius:999px;font-size:0.8rem;font-weight:500;box-shadow:0 6px 18px rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;';
+        document.body.appendChild(badge);
+    }
+    badge.innerHTML = `<span style="width:10px;height:10px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;display:inline-block;animation:kombinaSpin 0.8s linear infinite;"></span>
+        Procesando ${pendingItems} prenda${pendingItems > 1 ? 's' : ''}...`;
+
+    if (!document.getElementById('kombinaSpinStyle')) {
+        const st = document.createElement('style');
+        st.id = 'kombinaSpinStyle';
+        st.textContent = '@keyframes kombinaSpin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(st);
+    }
+}
+
+// Avisa si intentas cerrar la página mientras aún se está procesando
+window.addEventListener('beforeunload', (e) => {
+    if (pendingItems > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
+async function processAndSaveItem({ file, name, category }) {
+    try {
+        const removeBgFn = await getRemoveBackgroundFn();
+        const smallFile = await downscaleImage(file, 640);
+
+        let imageBlob;
+        try {
+            // Intenta usar la tarjeta gráfica (WebGPU): mucho más rápido si el dispositivo la soporta
+            imageBlob = await removeBgFn(smallFile, { ...BG_CONFIG, device: 'gpu' });
+        } catch (gpuErr) {
+            console.warn('[IA] GPU no disponible, usando CPU:', gpuErr);
+            imageBlob = await removeBgFn(smallFile, { ...BG_CONFIG, device: 'cpu' });
+        }
+
+        const processedBase64 = await trimTransparentPadding(imageBlob);
+
+        const newItem = {
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            name: name || 'Prenda sin nombre',
+            category: category,
+            image: processedBase64
+        };
+
+        wardrobeItems.push(newItem);
+        if (!saveWardrobe()) {
+            wardrobeItems.pop();
+            return;
+        }
+
+        applyFilters();
+        if (typeof profileNotify === 'function') {
+            profileNotify('¡Prenda añadida con éxito!');
+        }
+    } catch (error) {
+        console.error('Error al quitar el fondo con IA:', error);
+        alert('Hubo un error al procesar la imagen con IA. Revisa la consola (F12) para más detalles.');
+    } finally {
+        pendingItems--;
+        updateProcessingBadge();
+    }
+}
+
 function addNewItem() {
     const nameInput = document.getElementById('itemName');
     const categorySelect = document.getElementById('itemCategory');
     const imageInput = document.getElementById('itemImageFile');
 
-    const name = nameInput.value.trim();
-    const category = categorySelect.value;
+    const name = nameInput ? nameInput.value.trim() : '';
+    const category = categorySelect ? categorySelect.value : 'Todo';
 
-    if (!imageInput.files || imageInput.files.length === 0) {
+    if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
+        alert('Selecciona primero una foto de la prenda.');
         return;
     }
 
     const file = imageInput.files[0];
-    const reader = new FileReader();
 
-    reader.onload = function(e) {
-        const base64Image = e.target.result;
+    // Cierra el modal ya: no hace falta esperar a la IA
+    closeAddModal();
 
-        const newItem = {
-            id: Date.now(),
-            name: name || 'Prenda sin nombre',
-            category: category,
-            image: base64Image
-        };
+    pendingItems++;
+    updateProcessingBadge();
 
-        wardrobeItems.push(newItem);
-        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
-
-        nameInput.value = '';
-        imageInput.value = '';
-        closeAddModal();
-
-        applyFilters();
-    };
-
-    reader.readAsDataURL(file);
+    // Encola el trabajo para procesarlo después del anterior
+    processingQueue = processingQueue.then(() => processAndSaveItem({ file, name, category }));
 }
+
 
 // --- MODAL DE CONFIRMACIÓN PARA ELIMINAR ---
 function showAestheticConfirm(message, onConfirm) {

@@ -462,6 +462,18 @@ const OUTFIT_SLOTS = {
     zapatos:   { l: 35.7, t: 90.2, w: 33.0, h: 9.3,  z: 3 }
 };
 
+// Alineación vertical de cada prenda dentro de su caja: las de arriba se pegan abajo
+// y las de abajo se pegan arriba, así el top y el pantalón quedan juntos sin hueco.
+const OUTFIT_ALIGN = {
+    gorro:    'flex-end',
+    jersey:   'flex-end',
+    sudadera: 'flex-end',
+    superior: 'flex-end',
+    abrigo:   'flex-start',
+    inferior: 'flex-start',
+    zapatos:  'flex-start'
+};
+
 function buildOutfitCanvasHTML(items) {
     const list = Array.isArray(items) ? items : [];
     const placed = list.map(item => ({
@@ -489,7 +501,8 @@ function buildOutfitCanvasHTML(items) {
         const t = ((slot.t - minT) / bh * 100).toFixed(2);
         const w = (slot.w / bw * 100).toFixed(2);
         const h = (slot.h / bh * 100).toFixed(2);
-        return `<div style="position:absolute;left:${l}%;top:${t}%;width:${w}%;height:${h}%;z-index:${slot.z};display:flex;align-items:center;justify-content:center;">${content}</div>`;
+        const align = OUTFIT_ALIGN[getItemGroup(item)] || 'center';
+        return `<div style="position:absolute;left:${l}%;top:${t}%;width:${w}%;height:${h}%;z-index:${slot.z};display:flex;align-items:${align};justify-content:center;">${content}</div>`;
     }).join('');
 
     return `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;container-type:size;padding:6px;box-sizing:border-box;">
