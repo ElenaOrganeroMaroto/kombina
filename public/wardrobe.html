@@ -6,6 +6,8 @@
     <title>Kombina - Mi Armario</title>
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- La librería de IA para quitar el fondo se carga desde wardrobe.js (import dinámico) -->
 </head>
 <body>
 
@@ -84,17 +86,12 @@
             </select>
             
             <div style="display: flex; gap: 10px;">
-                <button class="btn-primary" onclick="addNewItem()" style="padding: 12px; flex: 1;">Guardar</button>
+                <button id="saveItemBtn" class="btn-primary" onclick="addNewItem()" style="padding: 12px; flex: 1;">Guardar</button>
                 <button onclick="closeAddModal()" style="padding: 12px; background: #f0ece6; border: none; border-radius: 8px; cursor: pointer; flex: 1; font-weight: 500;">Cancelar</button>
             </div>
         </div>
     </div>
 
-    <!-- Script opcional para asegurar que los navegadores oculten la barra de scroll en los chips -->
-    <style>
-        .chip-filters::-webkit-scrollbar { display: none; }
-        .chip-filters { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
 
     <script src="/js/layout.js"></script>
     <script src="/js/wardrobe.js"></script>

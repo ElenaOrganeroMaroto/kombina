@@ -11,7 +11,7 @@
 
     <div class="app-container">
 
-        <!-- Cabecera de marca (igual que en Armario, Outfits y Calendario) -->
+        <!-- Cabecera de marca -->
         <div class="brand-container">
             <p class="brand-header">kombina</p>
         </div>
@@ -28,6 +28,12 @@
         <div id="bottom-nav-container"></div>
 
     </div>
+
+    <!-- Librería de IA para quitar fondos localmente -->
+    <script type="module">
+        import imglyRemoveBackground from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/+esm';
+        window.removeBackground = imglyRemoveBackground;
+    </script>
 
     <script src="/js/layout.js"></script>
     <script src="/js/profile.js"></script>
