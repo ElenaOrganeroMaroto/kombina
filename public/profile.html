@@ -5,37 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kombina - Perfil</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
     <div class="app-container">
-        <div class="content-scroll">
-            <h2 style="font-weight: 300;">Perfil</h2>
-            
-            <div style="display: flex; align-items: center; gap: 15px; margin: 20px 0; background: #f9f8f6; padding: 15px; border-radius: 12px;">
-                <div style="width: 50px; height: 50px; background: #ddd; border-radius: 50%;"></div>
-                <div>
-                    <h4 style="margin: 0;">Elena Organero</h4>
-                    <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #777;">@elenaom</p>
-                </div>
-            </div>
 
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <a href="wardrobe.html" style="text-decoration: none; color: inherit; padding: 10px 0; border-bottom: 1px solid #eee;">🧥 Mi armario</a>
-                <a href="#" style="text-decoration: none; color: inherit; padding: 10px 0; border-bottom: 1px solid #eee;">✨ Mis outfits</a>
-                <a href="#" style="text-decoration: none; color: inherit; padding: 10px 0; border-bottom: 1px solid #eee;">📁 Mis colecciones</a>
-                <a href="#" style="text-decoration: none; color: inherit; padding: 10px 0; border-bottom: 1px solid #eee;">📅 Calendario</a>
-                <a href="index.html" style="text-decoration: none; color: #d9534f; padding: 10px 0; margin-top: 20px;">🚪 Cerrar sesión</a>
-            </div>
+        <!-- Cabecera de marca (igual que en Armario, Outfits y Calendario) -->
+        <div class="brand-container">
+            <p class="brand-header">kombina</p>
         </div>
 
-        <nav class="bottom-nav">
-            <a href="wardrobe.html">🧥 <span>Armario</span></a>
-            <a href="create-outfit.html">✨ <span>Outfits</span></a>
-            <a href="calendar.html">📅 <span>Calendario</span></a>
-            <a href="profile.html" class="active">👤 <span>Perfil</span></a>
-        </nav>
+        <!-- Contenido desplazable -->
+        <div class="content-scroll profile-screen">
+            
+            <!-- CONTENEDOR DINÁMICO DE PERFIL -->
+            <div id="profileDynamicContent"></div>
+
+        </div>
+
+        <!-- Navegación inferior inyectada por layout.js -->
+        <div id="bottom-nav-container"></div>
+
     </div>
 
+    <script src="/js/layout.js"></script>
+    <script src="/js/profile.js"></script>
 </body>
 </html>

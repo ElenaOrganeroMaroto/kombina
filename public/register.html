@@ -5,23 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kombina - Registro</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
     <div class="app-container">
-        <div>
-            <a href="index.html" style="text-decoration: none; color: #333;">&larr; Volver</a>
-            <h2>Crear cuenta</h2>
-        </div>
+        <div class="content-scroll">
+            <a href="index.html" style="text-decoration: none; color: #777; font-size: 0.9rem; font-weight: 500;">&larr; Volver</a>
+            <h2 style="font-weight: 600; font-size: 1.6rem; margin-top: 20px; margin-bottom: 30px; color: #2c2c2c;">Crear cuenta</h2>
 
-        <div>
-            <input type="email" id="regEmail" placeholder="Correo electrónico" style="width:100%; padding:12px; margin-bottom:12px; box-sizing:border-box; border:1px solid #ddd; border-radius:8px;">
-            <input type="password" id="regPassword" placeholder="Contraseña" style="width:100%; padding:12px; margin-bottom:12px; box-sizing:border-box; border:1px solid #ddd; border-radius:8px;">
-            <button class="btn-primary" onclick="registerUser()">Registrarse</button>
-            <p id="mensaje" style="text-align: center; font-size: 0.9rem; margin-top: 15px;"></p>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="email" id="regEmail" placeholder="Correo electrónico" style="width:100%; padding:14px; box-sizing:border-box; border:1px solid #e0dad0; border-radius:12px; background: #ffffff; font-size: 0.95rem;">
+                <input type="password" id="regPassword" placeholder="Contraseña" style="width:100%; padding:14px; box-sizing:border-box; border:1px solid #e0dad0; border-radius:12px; background: #ffffff; font-size: 0.95rem;">
+                <button class="btn-primary" onclick="registerUser()" style="margin-top: 10px;">Registrarse</button>
+                <p id="mensaje" style="text-align: center; font-size: 0.9rem; margin-top: 15px;"></p>
+            </div>
         </div>
-
-        <div></div>
     </div>
 
     <script src="/js/client.js"></script>
