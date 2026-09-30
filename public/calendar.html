@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kombina - Calendario</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- Cabecera de marca -->
+        <div class="brand-container">
+            <h2 class="brand-header">kombina</h2>
+        </div>
+
+        <!-- Contenido desplazable superior -->
+        <div class="content-scroll">
+            
+            <h1 class="section-title">Calendario</h1>
+            
+            <!-- Mes y Navegación -->
+            <div class="calendar-nav-header">
+                <button class="calendar-nav-btn" onclick="changeMonth(-1)">&lt;</button>
+                <span id="calendarMonthTitle" class="calendar-month-title"></span>
+                <button class="calendar-nav-btn" onclick="changeMonth(1)">&gt;</button>
+            </div>
+
+            <!-- Días de la semana -->
+            <div class="weekdays-grid">
+                <span>L</span><span>M</span><span>X</span><span>J</span><span>V</span><span>S</span><span>D</span>
+            </div>
+
+            <!-- Cuadrícula dinámica del mes -->
+            <div id="calendarGrid" class="calendar-grid">
+                <!-- Se inyecta dinámicamente desde client.js -->
+            </div>
+
+            <!-- SECCIÓN: OUTFITS DEL DÍA -->
+            <div class="daily-outfits-section">
+                <h2 class="daily-outfits-heading">Outfits del día</h2>
+                <div id="dailyOutfitsContainer">
+                    <!-- Se inyecta dinámicamente según la selección -->
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Navegación inferior inyectada por layout.js -->
+        <div id="bottom-nav-container"></div>
+
+    </div>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/calendar.js"></script>
+</body>
+</html>

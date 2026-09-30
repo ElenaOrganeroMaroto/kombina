@@ -5,20 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kombina - Crear Outfit</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
     <div class="app-container">
-        <!-- Cabecera -->
-        <div style="padding: 1.5rem 1.5rem 0.5rem 1.5rem;">
-            <h2 style="font-weight: 400; font-size: 1.4rem; margin: 0; color: #222;">Crear outfit</h2>
+        
+        <!-- Cabecera de marca con línea divisoria fina -->
+        <div style="padding-bottom: 0.8rem; border-bottom: 1px solid #e7e2d8;">
+            <h2 class="brand-header" style="margin: 0; padding-top: 1.2rem;">kombina</h2>
+        </div>
+
+        <!-- Cabecera de la sección (coherente con las demás vistas) -->
+        <div style="padding: 1.2rem 1.5rem 0.5rem 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="font-weight: 600; font-size: 1.4rem; margin: 0; color: #2c2c2c;">Crear outfit</h2>
         </div>
 
         <!-- Contenido principal -->
-        <div class="content-scroll" style="padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 20px;">
+        <div class="content-scroll" style="padding: 0.5rem 1.5rem 1.5rem 1.5rem; display: flex; flex-direction: column; gap: 20px;">
             
             <!-- Botón / Caja para redirigir a wardrobe.html en modo selección -->
-            <div onclick="goToWardrobeSelector()" style="border: 2px dashed #dcd6ce; border-radius: 16px; padding: 25px; text-align: center; background: #fbf9f5; cursor: pointer; transition: background 0.2s;">
+            <div onclick="goToWardrobeSelector()" style="border: 2px dashed #dcd6ce; border-radius: 16px; padding: 25px; text-align: center; background: #ffffff; cursor: pointer; transition: background 0.2s;">
                 <span style="font-size: 1.8rem; display: block; margin-bottom: 6px; color: #555;">+</span>
                 <strong style="font-size: 0.95rem; color: #333; display: block; margin-bottom: 4px;">Añadir prendas</strong>
                 <span style="font-size: 0.75rem; color: #888;">Selecciona las prendas de tu armario</span>
@@ -26,21 +33,20 @@
 
             <!-- Vista previa de las prendas seleccionadas para el outfit -->
             <div>
-                <span style="font-size: 0.9rem; color: #444; font-weight: 500; display: block; margin-bottom: 10px;">Mi outfit</span>
+                <span style="font-size: 0.9rem; color: #444; font-weight: 600; display: block; margin-bottom: 10px;">Mi outfit</span>
                 <div id="selectedOutfitItems" style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px;">
-                    <!-- Se mostrarán aquí los huecos o las fotos de las prendas elegidas -->
-                    <div style="width: 75px; height: 85px; background: #f4f1ea; border-radius: 12px; flex-shrink: 0; border: 1px solid #eae5de;"></div>
-                    <div style="width: 75px; height: 85px; background: #f4f1ea; border-radius: 12px; flex-shrink: 0; border: 1px solid #eae5de;"></div>
-                    <div style="width: 75px; height: 85px; background: #f4f1ea; border-radius: 12px; flex-shrink: 0; border: 1px solid #eae5de;"></div>
+                    <div style="width: 75px; height: 85px; background: #ffffff; border-radius: 12px; flex-shrink: 0; border: 1px solid #eae5de;"></div>
+                    <div style="width: 75px; height: 85px; background: #ffffff; border-radius: 12px; flex-shrink: 0; border: 1px solid #eae5de;"></div>
+                    <div style="width: 75px; height: 85px; background: #ffffff; border-radius: 12px; flex-shrink: 0; border: 1px solid #eae5de;"></div>
                 </div>
             </div>
 
             <!-- Botón de acción principal -->
-            <button onclick="generateAndSaveOutfit()" class="btn-primary" style="background: #222; color: white; border: none; padding: 14px; border-radius: 14px; font-weight: 500; font-size: 0.95rem; cursor: pointer; width: 100%; margin-top: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">Generar outfit</button>
+            <button onclick="generateAndSaveOutfit()" class="btn-primary">Generar outfit</button>
 
             <!-- Sección de Outfits Guardados Anteriores -->
-            <div style="margin-top: 10px;">
-                <h3 style="font-size: 1rem; color: #333; margin-bottom: 10px;">Tus conjuntos guardados</h3>
+            <div style="margin-top: 5px;">
+                <h3 style="font-size: 1rem; color: #333; margin-bottom: 10px; font-weight: 600;">Tus conjuntos guardados</h3>
                 <div id="savedOutfitsList" style="display: flex; flex-direction: column; gap: 10px;">
                     <!-- Listado de outfits guardados -->
                 </div>
@@ -52,6 +58,6 @@
     </div>
 
     <script src="/js/layout.js"></script>
-    <script src="/js/client.js"></script>
+    <script src="/js/create-outfit.js"></script>
 </body>
 </html>
