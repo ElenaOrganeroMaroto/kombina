@@ -1,16 +1,16 @@
-// --- GESTIÓN DE PERFIL Y VISTAS ESTILIZADAS ---
+// --- GESTIÓN DE PERFIL Y VISTAS ESTILIZADAS (CONECTADO A MONGODB) ---
 
-let currentProfileView = 'main'; // 'main', 'collection-detail', 'settings'
-let activeProfileTab = 'outfits'; // 'outfits' o 'collections' dentro del perfil
+let currentProfileView = 'main';
+let activeProfileTab = 'outfits';
 let activeColId = null;
 
-// --- MODO ASIGNAR ---
 let assignMode = false;
 let assignDateKey = null;
 let assignSelection = [];   
 let assignInitialCount = 0; 
 
-// Lee los parámetros de la URL para activar el modo de asignación de outfits al calendario
+let profileSavedOutfits = [];
+
 (function readAssignParams() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') !== 'assign') return;
@@ -18,13 +18,106 @@ let assignInitialCount = 0;
     assignMode = true;
     assignDateKey = params.get('date') || localStorage.getItem('kombina_target_date') || getTodayDateKey();
 
-    const saved = JSON.parse(localStorage.getItem('kombina_outfits') || '[]');
-    const current = loadCalendarAssignments()[assignDateKey] || [];
-    assignSelection = current.map(String).filter(id => saved.some(o => String(o.id) === id));
-    assignInitialCount = assignSelection.length;
+    Promise.all([fetchOutfitsForProfile(), fetchCollectionsForProfile(), fetchCalendarForProfile(), fetchProfileData()]).then(() => {
+        const current = loadCalendarAssignments()[assignDateKey] || [];
+        assignSelection = current.map(String).filter(id => profileSavedOutfits.some(o => String(o._id || o.id) === id));
+        assignInitialCount = assignSelection.length;
+        renderProfileScreen();
+    });
 
-    try { history.replaceState(null, '', window.location.pathname); } catch (e) { /* sin problema */ }
+    try { history.replaceState(null, '', window.location.pathname); } catch (e) { }
 })();
+
+let profileCollections = [];
+let profileAssignments = {};
+let profileData = { name: '', handle: '', bio: '', avatar: '' };
+
+async function fetchCalendarForProfile() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) { profileAssignments = {}; return; }
+        const res = await fetch(`/api/calendar?userId=${userId}`);
+        if (res.ok) profileAssignments = await res.json();
+    } catch (err) {
+        console.error('Error cargando el calendario en perfil:', err);
+        profileAssignments = {};
+    }
+}
+
+async function fetchProfileData() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) return;
+        const res = await fetch(`/api/profile?userId=${userId}`);
+        if (res.ok) {
+            profileData = await res.json();
+            // Limpiar restos antiguos que se guardaban solo en el navegador
+            ['kombina_user_name', 'kombina_user_handle', 'kombina_user_bio', 'kombina_user_avatar']
+                .forEach(k => localStorage.removeItem(k));
+        }
+    } catch (err) {
+        console.error('Error cargando el perfil:', err);
+    }
+}
+
+async function saveProfileData(fields) {
+    const userId = localStorage.getItem('kombina_user_id');
+    if (!userId) throw new Error('No hay sesión iniciada');
+    const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, ...fields })
+    });
+    if (!res.ok) throw new Error('Error al guardar el perfil');
+    profileData = await res.json();
+}
+
+function downscaleAvatar(dataUrl, maxSize = 256) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
+async function fetchCollectionsForProfile() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) { profileCollections = []; return; }
+        const res = await fetch(`/api/collections?userId=${userId}`);
+        if (res.ok) {
+            const data = await res.json();
+            // El resto del código usa col.id, así que lo normalizamos desde _id
+            profileCollections = data.map(c => ({ ...c, id: c._id }));
+        }
+    } catch (err) {
+        console.error('Error cargando colecciones:', err);
+        profileCollections = [];
+    }
+}
+
+async function fetchOutfitsForProfile() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) { profileSavedOutfits = []; return; }
+        const res = await fetch(`/api/outfits?userId=${userId}`);
+        if (res.ok) profileSavedOutfits = await res.json();
+    } catch (err) {
+        console.error('Error cargando outfits en perfil:', err);
+        profileSavedOutfits = [];
+    }
+}
 
 const PROFILE_ICONS = {
     settings: '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>',
@@ -42,38 +135,35 @@ const PROFILE_ICONS = {
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>'
 };
 
-// Genera una etiqueta SVG basada en el nombre del icono solicitado
 function profileIcon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PROFILE_ICONS[name]}</svg>`;
 }
 
-// Escapa caracteres especiales en strings HTML para evitar inyecciones o errores de renderizado
 function escapeHTML(str) {
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Inicializa la pantalla del perfil una vez cargado el DOM
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await Promise.all([fetchOutfitsForProfile(), fetchCollectionsForProfile(), fetchCalendarForProfile(), fetchProfileData()]);
     renderProfileScreen();
 });
 
-// Cambia entre las diferentes vistas principales del perfil (principal, ajustes, colección)
 function navigateProfile(view, param = null) {
     currentProfileView = view;
     if (param !== null) activeColId = param;
     renderProfileScreen();
 }
 
-// Cambia la pestaña activa dentro del perfil (entre 'outfits' y 'colecciones')
 function switchProfileTab(tab) {
     activeProfileTab = tab;
     renderProfileScreen();
 }
 
-// Renderiza dinámicamente el contenido del perfil según la vista actual seleccionada
-function renderProfileScreen() {
+async function renderProfileScreen() {
     const container = document.getElementById('profileDynamicContent');
     if (!container) return;
+
+    await fetchOutfitsForProfile();
 
     if (currentProfileView === 'main') {
         container.innerHTML = getMainProfileHTML();
@@ -87,7 +177,6 @@ function renderProfileScreen() {
     updateAssignFloatingButton();
 }
 
-// Ajusta dinámicamente la altura de la cuadrícula de elementos del perfil
 function fitProfileGrid() {
     const scroller = document.querySelector('.profile-grid-scroll');
     if (!scroller) return;
@@ -100,7 +189,6 @@ window.addEventListener('resize', fitProfileGrid);
 window.addEventListener('load', fitProfileGrid);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitProfileGrid);
 
-// Genera la vista previa en miniatura de un outfit
 function getOutfitPreviewHTML(outfit) {
     if (!outfit.items || !outfit.items.length || typeof buildOutfitCanvasHTML !== 'function') {
         return `<div class="outfit-preview-empty">${profileIcon('hanger')}</div>`;
@@ -112,7 +200,6 @@ function getOutfitPreviewHTML(outfit) {
     `;
 }
 
-// Genera el HTML para las secciones futuras (Comunidad y Sugerencias IA)
 function getFutureFeaturesHTML() {
     return `
         <div class="profile-future-box">
@@ -143,19 +230,13 @@ function getFutureFeaturesHTML() {
     `;
 }
 
-// Genera el HTML correspondiente a la pantalla principal del perfil de usuario
 function getMainProfileHTML() {
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
+    const collections = profileCollections;
+    const looseOutfits = profileSavedOutfits.filter(o => !o.collectionId);
 
-    const looseOutfits = savedOutfits.filter(o => !o.collectionId);
     let outfitsGridHtml = '';
     if (looseOutfits.length === 0) {
-        outfitsGridHtml = `
-            <div class="grid-empty-message">
-                Aún no tienes outfits guardados.
-            </div>
-        `;
+        outfitsGridHtml = `<div class="grid-empty-message">Aún no tienes outfits guardados.</div>`;
     } else {
         [...looseOutfits].reverse().forEach(outfit => {
             outfitsGridHtml += getOutfitTileHTML(outfit, false);
@@ -169,34 +250,32 @@ function getMainProfileHTML() {
             <div class="collection-card-count">Toca para crear</div>
         </div>
     `;
-    {
-        collections.forEach(col => {
-            const inCol = savedOutfits.filter(o => String(o.collectionId) === String(col.id));
-            const lastFour = inCol.slice(-4).reverse();
+    collections.forEach(col => {
+        const inCol = profileSavedOutfits.filter(o => String(o.collectionId) === String(col.id));
+        const lastFour = inCol.slice(-4).reverse();
 
-            let cover = `<div class="collection-cover-grid">`;
-            for (let i = 0; i < 4; i++) {
-                if (lastFour[i] && lastFour[i].items && lastFour[i].items.length && typeof buildOutfitCanvasHTML === 'function') {
-                    cover += `
-                        <div class="collection-cover-cell" style="position: relative; overflow: hidden;">
-                            ${buildOutfitCanvasHTML(lastFour[i].items)}
-                        </div>
-                    `;
-                } else {
-                    cover += `<div class="collection-cover-cell"></div>`;
-                }
+        let cover = `<div class="collection-cover-grid">`;
+        for (let i = 0; i < 4; i++) {
+            if (lastFour[i] && lastFour[i].items && lastFour[i].items.length && typeof buildOutfitCanvasHTML === 'function') {
+                cover += `
+                    <div class="collection-cover-cell" style="position: relative; overflow: hidden;">
+                        ${buildOutfitCanvasHTML(lastFour[i].items)}
+                    </div>
+                `;
+            } else {
+                cover += `<div class="collection-cover-cell"></div>`;
             }
-            cover += `</div>`;
+        }
+        cover += `</div>`;
 
-            collectionsGridHtml += `
-                <div class="collection-card" onclick="navigateProfile('collection-detail', '${col.id}')">
-                    <div class="profile-grid-item">${cover}</div>
-                    <div class="collection-card-name">${escapeHTML(col.name)}</div>
-                    <div class="collection-card-count">${inCol.length} ${inCol.length === 1 ? 'outfit' : 'outfits'}</div>
-                </div>
-            `;
-        });
-    }
+        collectionsGridHtml += `
+            <div class="collection-card" onclick="navigateProfile('collection-detail', '${col.id}')">
+                <div class="profile-grid-item">${cover}</div>
+                <div class="collection-card-name">${escapeHTML(col.name)}</div>
+                <div class="collection-card-count">${inCol.length} ${inCol.length === 1 ? 'outfit' : 'outfits'}</div>
+            </div>
+        `;
+    });
 
     return `
         ${assignMode ? getAssignBannerHTML() : `
@@ -244,16 +323,15 @@ function getMainProfileHTML() {
     `;
 }
 
-// Abre el modal para editar los datos personales del perfil (nombre, handle, bio, avatar)
 function openEditProfileModal() {
     ensureOverlayStyles();
     const old = document.getElementById('kombinaConfirmOverlay');
     if (old) old.remove();
 
-    const currentName = localStorage.getItem('kombina_user_name') || 'Elena Organero';
-    const currentHandle = localStorage.getItem('kombina_user_handle') || 'elenaorganero';
-    const currentBio = localStorage.getItem('kombina_user_bio') || 'Tu armario, tus reglas. Creando combinaciones únicas ✨';
-    const hasAvatar = !!localStorage.getItem('kombina_user_avatar');
+    const currentName = profileData.name || 'Elena Organero';
+    const currentHandle = profileData.handle || 'elenaorganero';
+    const currentBio = profileData.bio || 'Tu armario, tus reglas. Creando combinaciones únicas ✨';
+    const hasAvatar = !!profileData.avatar;
 
     const overlay = document.createElement('div');
     overlay.id = 'kombinaConfirmOverlay';
@@ -287,43 +365,52 @@ function openEditProfileModal() {
     `;
 
     if (hasAvatar) {
-        overlay.querySelector('#removeAvatarBtn').onclick = () => {
-            localStorage.removeItem('kombina_user_avatar');
-            close();
-            renderProfileScreen();
-            profileNotify('Foto de perfil eliminada');
+        overlay.querySelector('#removeAvatarBtn').onclick = async () => {
+            try {
+                await saveProfileData({ avatar: '' });
+                close();
+                renderProfileScreen();
+                profileNotify('Foto de perfil eliminada');
+            } catch (err) {
+                console.error(err);
+                profileNotify('No se pudo eliminar la foto');
+            }
         };
     }
 
     overlay.querySelector('#cancelEditProfileBtn').onclick = close;
-    overlay.querySelector('#saveEditProfileBtn').onclick = () => {
+    overlay.querySelector('#saveEditProfileBtn').onclick = async () => {
         const newName = overlay.querySelector('#editNameInput').value.trim();
         const newHandle = overlay.querySelector('#editHandleInput').value.trim().replace(/^@/, '');
         const newBio = overlay.querySelector('#editBioInput').value.trim();
 
-        if (newName) localStorage.setItem('kombina_user_name', newName);
-        if (newHandle) localStorage.setItem('kombina_user_handle', newHandle);
-        localStorage.setItem('kombina_user_bio', newBio);
+        const fields = { bio: newBio };
+        if (newName) fields.name = newName;
+        if (newHandle) fields.handle = newHandle;
 
-        close();
-        renderProfileScreen();
-        profileNotify('Perfil actualizado con éxito');
+        try {
+            await saveProfileData(fields);
+            close();
+            renderProfileScreen();
+            profileNotify('Perfil actualizado con éxito');
+        } catch (err) {
+            console.error(err);
+            profileNotify('No se pudo guardar el perfil');
+        }
     };
 
     document.body.appendChild(overlay);
 }
 
-// Renderiza la vista detallada del contenido de una colección específica
 function renderCollectionDetailView(container, colId) {
-    const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
+    const collections = profileCollections;
     const col = collections.find(c => String(c.id) === String(colId));
     if (!col) {
         navigateProfile('main');
         return;
     }
 
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const inCol = savedOutfits.filter(o => String(o.collectionId) === String(col.id));
+    const inCol = profileSavedOutfits.filter(o => String(o.collectionId) === String(colId));
 
     let gridHtml = '';
     if (inCol.length === 0) {
@@ -357,7 +444,6 @@ function renderCollectionDetailView(container, colId) {
     `;
 }
 
-// Habilita el modo de edición en línea del nombre de una colección
 function enableCollectionNameEdit(colId) {
     const nameDisplay = document.getElementById(`collectionNameDisplay-${colId}`);
     if (!nameDisplay) return;
@@ -372,25 +458,28 @@ function enableCollectionNameEdit(colId) {
     if (inputField) inputField.focus();
 }
 
-// Guarda el nuevo nombre modificado de una colección en el almacenamiento local
-function saveCollectionName(colId) {
+async function saveCollectionName(colId) {
     const inputField = document.getElementById(`edit-collection-input-${colId}`);
     if (!inputField) return;
     const newName = inputField.value.trim();
     if (!newName) return;
 
-    let collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
-    const col = collections.find(c => String(c.id) === String(colId));
-
-    if (col) {
-        col.name = newName;
-        localStorage.setItem('kombina_collections', JSON.stringify(collections));
+    try {
+        const res = await fetch(`/api/collections/${colId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+        });
+        if (!res.ok) throw new Error('Error al renombrar');
+        await fetchCollectionsForProfile();
         renderProfileScreen();
         profileNotify('Colección renombrada con éxito');
+    } catch (err) {
+        console.error(err);
+        profileNotify('No se pudo renombrar la colección');
     }
 }
 
-// Renderiza la vista de ajustes de la aplicación (cerrar sesión y eliminar cuenta)
 function renderSettingsView(container) {
     container.innerHTML = `
         <div class="profile-subview-header">
@@ -419,25 +508,23 @@ function renderSettingsView(container) {
     `;
 }
 
-// Gestiona el proceso de cierre de sesión (borra credenciales y redirige al index.html)
 function handleLogout() {
     profileConfirm({
         title: 'Cerrar sesión',
         message: '¿Estás seguro de que deseas cerrar sesión?',
         confirmText: 'Cerrar sesión',
         onConfirm: () => {
-            // 1. Borramos la sesión del almacenamiento local
             localStorage.removeItem('kombina_user');
-            
+            localStorage.removeItem('kombina_user_id');
+            ['kombina_calendar_assignments','kombina_temp_outfit','kombina_collections','kombina_outfits','kombina_wardrobe',
+             'kombina_user_name','kombina_user_handle','kombina_user_bio','kombina_user_avatar']
+                .forEach(k => localStorage.removeItem(k));
             profileNotify('Sesión cerrada correctamente');
-            
-            // 2. Redirigimos al index.html (pantalla de login)
             setTimeout(() => { window.location.href = 'index.html'; }, 1000);
         }
     });
 }
 
-// Gestiona el borrado total de la cuenta tanto en el servidor como limpiando el navegador
 function handleDeleteAccount() {
     profileConfirm({
         title: 'Eliminar cuenta',
@@ -446,20 +533,23 @@ function handleDeleteAccount() {
         onConfirm: async () => {
             try {
                 const currentUser = localStorage.getItem('kombina_user');
-                
-                // Si existe apiService, enviamos la petición al servidor para borrarla de su base de datos/memoria
-                if (typeof apiService !== 'undefined' && currentUser) {
-                    await apiService.deleteAccount(currentUser);
-                }
+                if (!currentUser) throw new Error('No hay sesión iniciada');
 
-                // Limpiamos todo el almacenamiento local del cliente
+                // Llamada directa (no depende de que apiService.js esté cargado en esta página)
+                const response = await fetch('/api/account', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-email': currentUser
+                    },
+                    body: JSON.stringify({ email: currentUser })
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(result.error || 'No se pudo eliminar la cuenta');
+
                 localStorage.clear();
-                
                 profileNotify('Cuenta eliminada');
-                setTimeout(() => { 
-                    window.location.href = 'index.html'; 
-                }, 1000);
-
+                setTimeout(() => { window.location.href = 'index.html'; }, 1000);
             } catch (error) {
                 profileNotify(error.message || 'Error al eliminar la cuenta');
             }
@@ -467,9 +557,8 @@ function handleDeleteAccount() {
     });
 }
 
-// Carga los datos guardados del usuario (avatar, nombre, handle y biografía) en la cabecera del perfil
 function loadProfileHeaderData() {
-    const avatar = localStorage.getItem('kombina_user_avatar');
+    const avatar = profileData.avatar;
     const img = document.getElementById('profileAvatarImg');
     const ph = document.getElementById('profileAvatarPlaceholder');
 
@@ -487,36 +576,40 @@ function loadProfileHeaderData() {
         }
     }
 
-    const name = localStorage.getItem('kombina_user_name');
+    const name = profileData.name;
     if (name) {
         const nEl = document.getElementById('profileNameDisplay');
         if (nEl) nEl.textContent = name;
     }
-    const handle = localStorage.getItem('kombina_user_handle') || 'elenaorganero';
+    const handle = profileData.handle || 'elenaorganero';
     const hEl = document.getElementById('profileUserHandle');
     if (hEl) hEl.textContent = '@' + handle;
 
-    const bio = localStorage.getItem('kombina_user_bio');
+    const bio = profileData.bio;
     if (bio) {
         const bEl = document.getElementById('profileBioDisplay');
         if (bEl) bEl.textContent = bio;
     }
 }
 
-// Actualiza y guarda la nueva foto de perfil subida por el usuario
 function updateProfileAvatar(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(evt) {
-        localStorage.setItem('kombina_user_avatar', evt.target.result);
-        renderProfileScreen();
-        profileNotify('Foto de perfil actualizada');
+    reader.onload = async function(evt) {
+        try {
+            const small = await downscaleAvatar(evt.target.result);
+            await saveProfileData({ avatar: small });
+            renderProfileScreen();
+            profileNotify('Foto de perfil actualizada');
+        } catch (err) {
+            console.error(err);
+            profileNotify('No se pudo guardar la foto de perfil');
+        }
     };
     reader.readAsDataURL(file);
 }
 
-// Muestra un modal de entrada para que el usuario asigne un nombre y cree una nueva colección
 function createNewCollectionPrompt() {
     ensureOverlayStyles();
     const old = document.getElementById('kombinaConfirmOverlay');
@@ -543,70 +636,69 @@ function createNewCollectionPrompt() {
     `;
 
     overlay.querySelector('#cancelCollectionBtn').onclick = close;
-    
     const inputField = overlay.querySelector('#newCollectionNameInput');
     
-    const handleCreate = () => {
+    const handleCreate = async () => {
         const name = inputField.value.trim();
         if (!name) return;
         
-        let collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
-        collections.push({ id: Date.now(), name: name });
-        localStorage.setItem('kombina_collections', JSON.stringify(collections));
-        
-        close();
-        renderProfileScreen();
-        profileNotify('Colección creada con éxito');
+        try {
+            const res = await fetch('/api/collections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, userId: localStorage.getItem('kombina_user_id') })
+            });
+            if (!res.ok) throw new Error('Error al crear');
+            await fetchCollectionsForProfile();
+            close();
+            renderProfileScreen();
+            profileNotify('Colección creada con éxito');
+        } catch (err) {
+            console.error(err);
+            profileNotify('No se pudo crear la colección');
+        }
     };
 
     overlay.querySelector('#saveCollectionBtn').onclick = handleCreate;
-    inputField.onkeydown = (e) => {
-        if (e.key === 'Enter') handleCreate();
-    };
+    inputField.onkeydown = (e) => { if (e.key === 'Enter') handleCreate(); };
 
     document.body.appendChild(overlay);
     if (inputField) inputField.focus();
 }
 
-// Carga las asignaciones de outfits guardadas en el calendario
 function loadCalendarAssignments() {
-    try { return JSON.parse(localStorage.getItem('kombina_calendar_assignments')) || {}; } catch (e) { return {}; }
+    return profileAssignments;
 }
 
-// Guarda las asignaciones de outfits actualizadas en el calendario
-function saveCalendarAssignments(assignments) {
-    localStorage.setItem('kombina_calendar_assignments', JSON.stringify(assignments));
-}
-
-// Elimina un outfit de todas las fechas del calendario donde estuviera asignado
-function purgeOutfitFromCalendar(outfitId) {
-    const assignments = loadCalendarAssignments();
-    Object.keys(assignments).forEach(key => {
-        assignments[key] = (assignments[key] || []).filter(id => String(id) !== String(outfitId));
-        if (assignments[key].length === 0) delete assignments[key];
+// Guarda en MongoDB los outfits de un día (lista vacía = quitar el día)
+async function saveCalendarDay(dateKey, outfitIds) {
+    const userId = localStorage.getItem('kombina_user_id');
+    const res = await fetch(`/api/calendar/${dateKey}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, outfitIds })
     });
-    saveCalendarAssignments(assignments);
+    if (!res.ok) throw new Error('Error al guardar el calendario');
+    if (outfitIds.length > 0) profileAssignments[dateKey] = outfitIds.map(String);
+    else delete profileAssignments[dateKey];
 }
+// (Al borrar un outfit, el servidor ya lo quita del calendario)
 
-// Devuelve la clave de la fecha actual en formato 'YYYY-MM-DD'
 function getTodayDateKey() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Formatea una clave de fecha a un formato legible largo en castellano (ej: '3 de octubre de 2026')
 function formatDateKeyLong(key) {
     const [y, m, d] = String(key).split('-');
     const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     return `${parseInt(d)} de ${months[parseInt(m) - 1]} de ${y}`;
 }
 
-// Redimensiona un icono SVG ajustando sus atributos de ancho y alto en píxeles
 function sizedProfileIcon(name, px) {
     return profileIcon(name).replace('<svg ', `<svg width="${px}" height="${px}" `);
 }
 
-// Muestra un mensaje flotante de notificación (toast) temporal al usuario
 function profileNotify(message) {
     if (typeof showInAppToast === 'function') return showInAppToast(message);
     const old = document.getElementById('profileToast');
@@ -619,7 +711,6 @@ function profileNotify(message) {
     setTimeout(() => toast.remove(), 2000);
 }
 
-// Asegura que existan los estilos CSS globales necesarios para los modales y barras de desplazamiento
 function ensureOverlayStyles() {
     if (document.getElementById('kombinaOverlayStyles')) return;
     const style = document.createElement('style');
@@ -631,7 +722,6 @@ function ensureOverlayStyles() {
     document.head.appendChild(style);
 }
 
-// Muestra un diálogo de confirmación personalizado antes de realizar acciones críticas (eliminar, salir, etc.)
 function profileConfirm({ title, message, confirmText = 'Eliminar', onConfirm }) {
     ensureOverlayStyles();
     const old = document.getElementById('kombinaConfirmOverlay');
@@ -658,31 +748,29 @@ function profileConfirm({ title, message, confirmText = 'Eliminar', onConfirm })
     document.body.appendChild(overlay);
 }
 
-// Genera el HTML de una tarjeta individual de outfit en la cuadrícula (según esté en modo selección o normal)
 function getOutfitTileHTML(outfit, inCollection) {
+    const outfitId = outfit._id || outfit.id;
     if (assignMode) {
-        const selected = assignSelection.includes(String(outfit.id));
+        const selected = assignSelection.includes(String(outfitId));
         const badge = selected
             ? 'background: #222; border: 2px solid #222; color: #fff;'
             : 'background: rgba(255,255,255,0.92); border: 1.5px solid #bdb7ad; color: transparent;';
         return `
-            <div class="profile-grid-item" data-outfit-id="${outfit.id}" style="aspect-ratio: 3 / 4; position: relative; cursor: pointer; ${selected ? 'outline: 2px solid #222; outline-offset: -2px;' : ''}" onclick="toggleAssignSelection(${outfit.id})" title="Toca para marcar">
+            <div class="profile-grid-item" data-outfit-id="${outfitId}" style="aspect-ratio: 3 / 4; position: relative; cursor: pointer; ${selected ? 'outline: 2px solid #222; outline-offset: -2px;' : ''}" onclick="toggleAssignSelection('${outfitId}')" title="Toca para marcar">
                 ${getOutfitPreviewHTML(outfit)}
                 <span style="position: absolute; top: 8px; right: 8px; z-index: 20; width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%; display: flex; align-items: center; justify-content: center; ${badge}">${sizedProfileIcon('check', 12)}</span>
             </div>
         `;
     }
     return `
-        <div class="profile-grid-item" data-outfit-id="${outfit.id}" style="aspect-ratio: 3 / 4;" onclick="openOutfitActions(${outfit.id}, ${inCollection ? 'true' : 'false'})" title="Haz clic para ver opciones">
+        <div class="profile-grid-item" data-outfit-id="${outfitId}" style="aspect-ratio: 3 / 4;" onclick="openOutfitActions('${outfitId}', ${inCollection ? 'true' : 'false'})" title="Haz clic para ver opciones">
             ${getOutfitPreviewHTML(outfit)}
         </div>
     `;
 }
 
-// Abre un menú modal con las opciones de gestión disponibles para un outfit seleccionado
 function openOutfitActions(id, inCollection) {
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const outfit = savedOutfits.find(o => String(o.id) === String(id));
+    const outfit = profileSavedOutfits.find(o => String(o._id || o.id) === String(id));
     if (!outfit) return;
 
     closeOutfitActions();
@@ -690,24 +778,22 @@ function openOutfitActions(id, inCollection) {
 
     const items = Array.isArray(outfit.items) ? outfit.items : [];
     const canvas = (typeof buildOutfitCanvasHTML === 'function' && items.length) ? buildOutfitCanvasHTML(items) : '';
+    const outfitId = outfit._id || outfit.id;
 
     const overlay = document.createElement('div');
     overlay.id = 'outfitActionOverlay';
     overlay.style.cssText = 'position: fixed; inset: 0; z-index: 1000; overflow: hidden; background: rgba(20,20,20,0.5); display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;';
     overlay.onclick = (e) => { if (e.target === overlay) closeOutfitActions(); };
 
-    const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
+    const collections = profileCollections;
     const currentColId = outfit.collectionId ? String(outfit.collectionId) : '';
     const moveRow = (label, targetId, isCurrent) => `
-        <button type="button" ${isCurrent ? 'disabled' : `onclick="moveOutfitToCollection(${outfit.id}, '${targetId}')"`} style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 12px; box-sizing: border-box; background: ${isCurrent ? '#f5f1ea' : '#fff'}; border: none; border-bottom: 1px solid #f0ebe3; font-size: 0.85rem; color: #2c2c2c; text-align: left; cursor: ${isCurrent ? 'default' : 'pointer'};">
+        <button type="button" ${isCurrent ? 'disabled' : `onclick="moveOutfitToCollection('${outfitId}', '${targetId}')"`} style="display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 12px; box-sizing: border-box; background: ${isCurrent ? '#f5f1ea' : '#fff'}; border: none; border-bottom: 1px solid #f0ebe3; font-size: 0.85rem; color: #2c2c2c; text-align: left; cursor: ${isCurrent ? 'default' : 'pointer'};">
             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${label}</span>
             ${isCurrent ? '<span style="flex-shrink: 0; margin-left: 8px; font-size: 0.72rem; color: #8a8070;">Actual</span>' : ''}
         </button>`;
     let moveOptions = moveRow('Outfits (sin colección)', '', currentColId === '');
     collections.forEach(col => { moveOptions += moveRow(escapeHTML(col.name), col.id, String(col.id) === currentColId); });
-    if (collections.length === 0) {
-        moveOptions += '<div style="padding: 10px 12px; font-size: 0.78rem; color: #999;">Aún no tienes colecciones.</div>';
-    }
 
     overlay.innerHTML = `
         <div role="dialog" aria-modal="true" style="background: #fff; width: 100%; max-width: 320px; max-height: calc(100vh - 40px); overflow-y: auto; border-radius: 20px; padding: 14px; box-sizing: border-box; box-shadow: 0 20px 50px rgba(0,0,0,0.25);">
@@ -716,10 +802,10 @@ function openOutfitActions(id, inCollection) {
                 <button type="button" onclick="closeOutfitActions()" aria-label="Cerrar" style="position: absolute; top: 8px; right: 8px; z-index: 30; width: 28px; height: 28px; border-radius: 50%; border: 1px solid #e0dad0; background: #fff; color: #333; font-size: 0.8rem; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center;">✕</button>
             </div>
 
-            <div id="modal-outfit-title-container-${outfit.id}" style="text-align: center; margin: 12px 0 14px; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div id="modal-outfit-title-container-${outfitId}" style="text-align: center; margin: 12px 0 14px; display: flex; flex-direction: column; align-items: center; gap: 4px;">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <strong id="modalOutfitNameDisplay-${outfit.id}" style="font-size: 1rem; color: #222;">${escapeHTML(outfit.name || 'Outfit sin nombre')}</strong>
-                    <button class="aesthetic-edit-btn" onclick="enableModalOutfitNameEdit(${outfit.id}, ${inCollection})" title="Editar nombre" style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center;">
+                    <strong id="modalOutfitNameDisplay-${outfitId}" style="font-size: 1rem; color: #222;">${escapeHTML(outfit.name || 'Outfit sin nombre')}</strong>
+                    <button class="aesthetic-edit-btn" onclick="enableModalOutfitNameEdit('${outfitId}', ${inCollection})" title="Editar nombre" style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
                 </div>
@@ -727,10 +813,10 @@ function openOutfitActions(id, inCollection) {
             </div>
 
             <div style="display: flex; gap: 10px;">
-                <button type="button" onclick="assignOutfitToCalendar(${outfit.id})" style="flex: 1; height: 46px; background: #2c2c2c; color: #fff; border: none; border-radius: 14px; font-size: 0.9rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <button type="button" onclick="assignOutfitToCalendar('${outfitId}')" style="flex: 1; height: 46px; background: #2c2c2c; color: #fff; border: none; border-radius: 14px; font-size: 0.9rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     ${sizedProfileIcon('calendar', 18)} Asignar outfit
                 </button>
-                <button type="button" onclick="deleteOutfitById(${outfit.id})" aria-label="Eliminar outfit" title="Eliminar outfit" style="width: 46px; height: 46px; flex-shrink: 0; background: #1f1f1f; color: #fff; border: none; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                <button type="button" onclick="deleteOutfitById('${outfitId}')" aria-label="Eliminar outfit" title="Eliminar outfit" style="width: 46px; height: 46px; flex-shrink: 0; background: #1f1f1f; color: #fff; border: none; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
                     ${sizedProfileIcon('trash', 20)}
                 </button>
             </div>
@@ -747,7 +833,6 @@ function openOutfitActions(id, inCollection) {
     document.body.appendChild(overlay);
 }
 
-// Habilita el input de edición de nombre dentro del modal de acciones de un outfit
 function enableModalOutfitNameEdit(id, inCollection) {
     const nameDisplay = document.getElementById(`modalOutfitNameDisplay-${id}`);
     if (!nameDisplay) return;
@@ -757,70 +842,78 @@ function enableModalOutfitNameEdit(id, inCollection) {
     container.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;">
             <input type="text" id="edit-modal-outfit-input-${id}" class="aesthetic-input" value="${currentName}" style="padding: 4px 8px; font-size: 0.9rem; border: 1px solid #ccc; border-radius: 4px; outline: none; width: 140px;">
-            <button class="aesthetic-save-btn" onclick="saveModalOutfitName(${id}, ${inCollection})" style="background: #111; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem; cursor: pointer;">✔</button>
+            <button class="aesthetic-save-btn" onclick="saveModalOutfitName('${id}', ${inCollection})" style="background: #111; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; font-size: 0.8rem; cursor: pointer;">✔</button>
         </div>
     `;
     const inputField = document.getElementById(`edit-modal-outfit-input-${id}`);
     if (inputField) inputField.focus();
 }
 
-// Guarda el nuevo nombre modificado de un outfit específico
-function saveModalOutfitName(id, inCollection) {
+async function saveModalOutfitName(id, inCollection) {
     const inputField = document.getElementById(`edit-modal-outfit-input-${id}`);
     if (!inputField) return;
     const newName = inputField.value.trim();
     if (!newName) return;
 
-    let savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const outfit = savedOutfits.find(o => String(o.id) === String(id));
+    try {
+        const response = await fetch(`/api/outfits/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+        });
+        if (!response.ok) throw new Error('Error al actualizar nombre');
 
-    if (outfit) {
-        outfit.name = newName;
-        localStorage.setItem('kombina_outfits', JSON.stringify(savedOutfits));
+        const data = await response.json();
+        const outfit = profileSavedOutfits.find(o => String(o._id || o.id) === String(id));
+        if (outfit) outfit.name = data.outfit.name;
+
         closeOutfitActions();
         openOutfitActions(id, inCollection);
         renderProfileScreen();
         profileNotify('Nombre de outfit actualizado');
+    } catch (err) {
+        console.error('Error:', err);
+        profileNotify('No se pudo actualizar el nombre');
     }
 }
 
-// Cierra el modal de acciones de los outfits
 function closeOutfitActions() {
     const overlay = document.getElementById('outfitActionOverlay');
     if (overlay) overlay.remove();
 }
 
-// Escucha la tecla Escape para cerrar modales abiertos de forma rápida
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const confirmBox = document.getElementById('kombinaConfirmOverlay');
     if (confirmBox) confirmBox.remove(); else closeOutfitActions();
 });
 
-// Redirige al calendario para asignar un outfit concreto
 function assignOutfitToCalendar(id) {
     window.location.href = 'calendar.html?assign=' + encodeURIComponent(id);
 }
 
-// Elimina un outfit por su ID y lo limpia también de las asignaciones del calendario
 function deleteOutfitById(id) {
     profileConfirm({
         title: 'Eliminar outfit',
         message: 'Se eliminará este outfit y también se quitará de tu calendario.',
         confirmText: 'Eliminar',
-        onConfirm: () => {
-            let savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-            savedOutfits = savedOutfits.filter(o => String(o.id) !== String(id));
-            localStorage.setItem('kombina_outfits', JSON.stringify(savedOutfits));
-            purgeOutfitFromCalendar(id);
-            closeOutfitActions();
-            renderProfileScreen();
-            profileNotify('Outfit eliminado');
+        onConfirm: async () => {
+            try {
+                const response = await fetch(`/api/outfits/${id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Error al eliminar');
+
+                profileSavedOutfits = profileSavedOutfits.filter(o => String(o._id || o.id) !== String(id));
+                closeOutfitActions();
+                renderProfileScreen();
+                profileNotify('Outfit eliminado');
+            } catch (err) {
+                console.error('Error:', err);
+                profileNotify('No se pudo eliminar el outfit');
+            }
         }
     });
 }
 
-// Alterna la visibilidad de la lista desplegable para mover outfits entre colecciones
 function toggleMoveList() {
     const list = document.getElementById('moveCollectionList');
     const chevron = document.getElementById('moveChevron');
@@ -831,30 +924,36 @@ function toggleMoveList() {
     if (open) list.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
-// Mueve un outfit de una colección a otra (o lo deja sin colección)
-function moveOutfitToCollection(outfitId, targetColId) {
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const idx = savedOutfits.findIndex(o => String(o.id) === String(outfitId));
-    if (idx === -1) return;
+async function moveOutfitToCollection(outfitId, targetColId) {
+    try {
+        const updateData = targetColId ? { collectionId: targetColId } : { collectionId: null };
+        const response = await fetch(`/api/outfits/${outfitId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData)
+        });
+        if (!response.ok) throw new Error('Error al mover');
 
-    let destino = 'Outfits';
-    if (targetColId) {
-        const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
-        const col = collections.find(c => String(c.id) === String(targetColId));
-        if (!col) return;
-        savedOutfits[idx].collectionId = String(col.id);
-        destino = col.name;
-    } else {
-        delete savedOutfits[idx].collectionId;
+        const data = await response.json();
+        const idx = profileSavedOutfits.findIndex(o => String(o._id || o.id) === String(outfitId));
+        if (idx !== -1) profileSavedOutfits[idx] = data.outfit;
+
+        let destino = 'Outfits';
+        if (targetColId) {
+            const collections = profileCollections;
+            const col = collections.find(c => String(c.id) === String(targetColId));
+            if (col) destino = col.name;
+        }
+
+        closeOutfitActions();
+        renderProfileScreen();
+        profileNotify(targetColId ? `Movido a «${destino}»` : 'Movido a Outfits');
+    } catch (err) {
+        console.error('Error:', err);
+        profileNotify('No se pudo mover el outfit');
     }
-
-    localStorage.setItem('kombina_outfits', JSON.stringify(savedOutfits));
-    closeOutfitActions();
-    renderProfileScreen();
-    profileNotify(targetColId ? `Movido a «${destino}»` : 'Movido a Outfits');
 }
 
-// Genera el banner informativo superior cuando se activa el modo de asignación de outfits
 function getAssignBannerHTML() {
     return `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #ece5d8; border: 1px solid #ddd3c1; color: #2c2c2c; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;">
@@ -867,21 +966,18 @@ function getAssignBannerHTML() {
     `;
 }
 
-// Alterna la selección de un outfit en el modo de asignación masiva al calendario
 function toggleAssignSelection(id) {
     const sid = String(id);
     const pos = assignSelection.indexOf(sid);
     if (pos === -1) assignSelection.push(sid); else assignSelection.splice(pos, 1);
 
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const outfit = savedOutfits.find(o => String(o.id) === sid);
+    const outfit = profileSavedOutfits.find(o => String(o._id || o.id) === sid);
     const tile = document.querySelector(`[data-outfit-id="${sid}"]`);
     if (tile && outfit) tile.outerHTML = getOutfitTileHTML(outfit, false);
 
     updateAssignFloatingButton();
 }
 
-// Muestra u oculta el botón flotante para confirmar la selección de outfits en el calendario
 function updateAssignFloatingButton() {
     let btn = document.getElementById('finishSelectionBtn');
 
@@ -913,42 +1009,40 @@ function updateAssignFloatingButton() {
     }
 }
 
-// Confirma y guarda en el almacenamiento local los outfits seleccionados para una fecha del calendario
-function confirmAssignOutfits() {
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
+async function confirmAssignOutfits() {
     const ids = assignSelection
-        .map(sid => savedOutfits.find(o => String(o.id) === sid))
+        .map(sid => profileSavedOutfits.find(o => String(o._id || o.id) === sid))
         .filter(Boolean)
-        .map(o => o.id);
+        .map(o => o._id || o.id);
 
     if (ids.length === 0 && assignInitialCount === 0) {
         profileNotify('Selecciona al menos un outfit.');
         return;
     }
 
-    const assignments = loadCalendarAssignments();
-    if (ids.length > 0) assignments[assignDateKey] = ids;
-    else delete assignments[assignDateKey];
-    saveCalendarAssignments(assignments);
+    try {
+        await saveCalendarDay(assignDateKey, ids); // hay que esperar antes de cambiar de página
+    } catch (err) {
+        console.error(err);
+        profileNotify('No se pudo guardar en el calendario');
+        return;
+    }
 
     const key = assignDateKey;
     assignMode = false;
     window.location.href = 'calendar.html?date=' + encodeURIComponent(key);
 }
 
-// Cancela el modo de asignación y regresa al calendario
 function cancelAssignMode() {
     const key = assignDateKey;
     assignMode = false;
     window.location.href = 'calendar.html?date=' + encodeURIComponent(key);
 }
 
-// Elimina una colección completa, retirando sus outfits del calendario o de la lista general
 function deleteCollection(colId) {
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
+    const collections = profileCollections;
     const col = collections.find(c => String(c.id) === String(colId));
-    const inCol = savedOutfits.filter(o => String(o.collectionId) === String(colId));
+    const inCol = profileSavedOutfits.filter(o => String(o.collectionId) === String(colId));
 
     const countTxt = inCol.length === 0
         ? 'La colección está vacía.'
@@ -958,17 +1052,24 @@ function deleteCollection(colId) {
         title: col ? `Eliminar «${col.name}»` : 'Eliminar colección',
         message: countTxt + ' Esta acción no se puede deshacer.',
         confirmText: 'Eliminar',
-        onConfirm: () => {
-            inCol.forEach(o => purgeOutfitFromCalendar(o.id));
+        onConfirm: async () => {
+            try {
+                for (const o of inCol) {
+                    const oid = o._id || o.id;
+                    await fetch(`/api/outfits/${oid}`, { method: 'DELETE' });
+                }
 
-            const remaining = savedOutfits.filter(o => String(o.collectionId) !== String(colId));
-            localStorage.setItem('kombina_outfits', JSON.stringify(remaining));
+                const delRes = await fetch(`/api/collections/${colId}`, { method: 'DELETE' });
+                if (!delRes.ok) throw new Error('Error al eliminar la colección');
 
-            const remainingCols = collections.filter(c => String(c.id) !== String(colId));
-            localStorage.setItem('kombina_collections', JSON.stringify(remainingCols));
+                await Promise.all([fetchOutfitsForProfile(), fetchCollectionsForProfile()]);
 
-            navigateProfile('main');
-            profileNotify('Colección eliminada');
+                navigateProfile('main');
+                profileNotify('Colección eliminada');
+            } catch (err) {
+                console.error('Error:', err);
+                profileNotify('Error al eliminar la colección');
+            }
         }
     });
 }

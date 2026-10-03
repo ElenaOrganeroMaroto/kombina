@@ -33,7 +33,12 @@ async function loginUser() {
         msgElement.innerText = '¡Inicio de sesión exitoso! Redirigiendo...';
         
         // Guardamos la sesión en el cliente
-        localStorage.setItem('kombina_user', email);
+        localStorage.setItem('kombina_user', (data.user && data.user.email) || email.trim().toLowerCase());
+        
+        // Guardamos el ID único de MongoDB Atlas para cargar el armario del usuario
+        if (data.user && data.user._id) {
+            localStorage.setItem('kombina_user_id', data.user._id);
+        }
         
         setTimeout(() => {
             window.location.href = 'wardrobe.html';
@@ -50,6 +55,8 @@ async function loginUser() {
 function logout() {
     // Borramos la sesión almacenada en el navegador
     localStorage.removeItem('kombina_user');
+    localStorage.removeItem('kombina_user_id'); // Limpiamos también el ID del armario
+    
     // Redirigimos de vuelta a la pantalla de inicio / login
     window.location.href = 'index.html';
 }

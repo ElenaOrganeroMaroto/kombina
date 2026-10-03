@@ -1,17 +1,39 @@
-// --- GESTIÓN DEL ARMARIO Y PRENDAS ---
+// --- GESTIÓN DEL ARMARIO Y PRENDAS (CONECTADO A MONGODB) ---
 
-let wardrobeItems = JSON.parse(localStorage.getItem('kombina_wardrobe')) || [];
+let wardrobeItems = [];
 let currentCategory = 'Todo';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     if (document.getElementById('wardrobeGrid')) {
-        renderWardrobe();
+        await loadWardrobeFromServer(); // Cargamos las prendas reales desde MongoDB Atlas
         ensureItemModalExists();
         migrateTrimExistingItems();  // recorta las prendas antiguas (solo una vez)
         preloadBackgroundRemoval();  // precarga la IA en segundo plano
     }
 });
 
+// Cargar prendas del servidor asociadas al usuario actual
+async function loadWardrobeFromServer() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) {
+            console.warn('No hay usuario identificado. Usando armario vacío.');
+            wardrobeItems = [];
+            renderWardrobe();
+            return;
+        }
+
+        const response = await fetch(`/api/clothing?userId=${userId}`);
+        if (!response.ok) throw new Error('Error al cargar las prendas');
+        
+        wardrobeItems = await response.json();
+        renderWardrobe();
+    } catch (err) {
+        console.error('Error conectando con el servidor para la ropa:', err);
+        wardrobeItems = [];
+        renderWardrobe();
+    }
+}
 
 function renderWardrobe(itemsToRender = wardrobeItems) {
     const grid = document.getElementById('wardrobeGrid');
@@ -31,7 +53,7 @@ function renderWardrobe(itemsToRender = wardrobeItems) {
         const card = document.createElement('div');
         card.className = 'profile-grid-item';
         card.setAttribute('data-category', item.category || '');
-        card.setAttribute('data-id', item.id);
+        card.setAttribute('data-id', item._id || item.id);
         
         let visualContent = `<div class="outfit-preview-empty"><svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>`;
         
@@ -82,7 +104,7 @@ function attachCardInteractions(card, item) {
             timer = null;
             longPressed = true;
             if (navigator.vibrate) navigator.vibrate(15);
-            openItemDetail(item.id);
+            openItemDetail(item._id || item.id);
         }, LONG_PRESS_MS);
     });
 
@@ -143,7 +165,7 @@ function ensureItemModalExists() {
 }
 
 function openItemDetail(id) {
-    const item = wardrobeItems.find(i => String(i.id) === String(id));
+    const item = wardrobeItems.find(i => String(i._id || i.id) === String(id));
     if (!item) return;
 
     ensureItemModalExists();
@@ -158,7 +180,7 @@ function openItemDetail(id) {
     }
 
     renderModalTitle(item);
-    deleteBtn.onclick = () => deleteWardrobeItem(item.id);
+    deleteBtn.onclick = () => deleteWardrobeItem(item._id || item.id);
 
     document.getElementById('itemDetailModal').style.display = 'flex';
 }
@@ -167,9 +189,10 @@ function renderModalTitle(item) {
     const titleContainer = document.getElementById('modal-title-container');
     if (!titleContainer) return;
 
+    const itemId = item._id || item.id;
     titleContainer.innerHTML = `
         <h3 id="modalItemName" style="margin: 0; font-size: 1rem; color: #2c2c2c; font-weight: 600; word-break: break-word;">${item.name}</h3>
-        <button class="aesthetic-edit-btn" onclick="enableItemNameEdit('${item.id}')" title="Editar nombre">
+        <button class="aesthetic-edit-btn" onclick="enableItemNameEdit('${itemId}')" title="Editar nombre">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
         </button>
     `;
@@ -189,20 +212,30 @@ function enableItemNameEdit(id) {
     if (inputField) inputField.focus();
 }
 
-function saveItemName(id) {
+async function saveItemName(id) {
     const inputField = document.getElementById('edit-item-input');
     if (!inputField) return;
     const newName = inputField.value.trim();
 
     if (!newName) return;
 
-    const item = wardrobeItems.find(i => String(i.id) === String(id));
+    const item = wardrobeItems.find(i => String(i._id || i.id) === String(id));
     if (item) {
-        item.name = newName;
-        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
+        try {
+            const response = await fetch(`/api/clothing/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+            if (!response.ok) throw new Error('No se pudo guardar el nombre');
 
-        renderWardrobe();
-        renderModalTitle(item);
+            item.name = newName;
+            renderWardrobe();
+            renderModalTitle(item);
+        } catch (err) {
+            console.error('Error al renombrar la prenda:', err);
+            alert('No se pudo guardar el nombre en el servidor.');
+        }
     }
 }
 
@@ -211,14 +244,29 @@ function closeItemDetail() {
     if (modal) modal.style.display = 'none';
 }
 
-function deleteWardrobeItem(id) {
-    showAestheticConfirm('¿Estás seguro de que deseas eliminar esta prenda permanentemente?', () => {
-        wardrobeItems = wardrobeItems.filter(i => String(i.id) !== String(id));
-        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
-        const temp = JSON.parse(localStorage.getItem('kombina_temp_outfit')) || [];
-        localStorage.setItem('kombina_temp_outfit', JSON.stringify(temp.filter(i => String(i.id) !== String(id))));
-        closeItemDetail();
-        applyFilters();
+async function deleteWardrobeItem(id) {
+    showAestheticConfirm('¿Estás seguro de que deseas eliminar esta prenda permanentemente?', async () => {
+        try {
+            const response = await fetch(`/api/clothing/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) throw new Error('No se pudo eliminar la prenda');
+
+            wardrobeItems = wardrobeItems.filter(i => String(i._id || i.id) !== String(id));
+            
+            const temp = JSON.parse(localStorage.getItem('kombina_temp_outfit')) || [];
+            localStorage.setItem('kombina_temp_outfit', JSON.stringify(temp.filter(i => String(i._id || i.id) !== String(id))));
+            
+            closeItemDetail();
+            applyFilters();
+            if (typeof profileNotify === 'function') {
+                profileNotify('Prenda eliminada');
+            }
+        } catch (err) {
+            console.error('Error al eliminar:', err);
+            alert('No se pudo eliminar la prenda del servidor.');
+        }
     });
 }
 
@@ -269,7 +317,6 @@ function closeAddModal() {
 
 
 // --- CARGA DE LA LIBRERÍA DE QUITAR FONDO ---
-// Se prueban varias fuentes por orden (el +esm de jsDelivr falla con lodash)
 const BG_REMOVAL_URLS = [
     'https://esm.sh/@imgly/background-removal@1.4.5',
     'https://esm.sh/@imgly/background-removal@1.5.5',
@@ -297,14 +344,11 @@ async function getRemoveBackgroundFn() {
     throw lastError || new Error('No se pudo cargar la librería de quitar fondo.');
 }
 
-// Modelo "small": bastante más rápido y ligero, con calidad suficiente para prendas.
-// Si notas recortes peores, cambia 'small' por 'medium'.
 const BG_CONFIG = {
     model: 'small',
-    output: { format: 'image/webp', quality: 0.85 } // ocupa menos en localStorage
+    output: { format: 'image/webp', quality: 0.85 }
 };
 
-// Descarga el código y los modelos al abrir la página, para que al guardar ya estén listos
 async function preloadBackgroundRemoval() {
     try {
         await getRemoveBackgroundFn();
@@ -313,11 +357,10 @@ async function preloadBackgroundRemoval() {
         }
         console.log('[IA] Modelo precargado');
     } catch (err) {
-        console.warn('[IA] No se pudo precargar (se intentará al guardar):', err);
+        console.warn('[IA] No se pudo precargar:', err);
     }
 }
 
-// Recorta los márgenes transparentes: la prenda ocupa toda la imagen y encaja mejor en el outfit
 function trimTransparentPadding(source, pad = 0.02) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -353,7 +396,7 @@ function trimTransparentPadding(source, pad = 0.02) {
                         }
                     }
                 }
-                if (maxX < 0) return fallback(); // imagen totalmente transparente
+                if (maxX < 0) return fallback();
 
                 const padX = Math.round((maxX - minX) * pad);
                 const padY = Math.round((maxY - minY) * pad);
@@ -377,36 +420,11 @@ function trimTransparentPadding(source, pad = 0.02) {
     });
 }
 
-// Recorta una sola vez las prendas (y outfits guardados) que ya tenías de antes
 async function migrateTrimExistingItems() {
     if (localStorage.getItem('kombina_trimmed_v1')) return;
-    if (!wardrobeItems.length) { localStorage.setItem('kombina_trimmed_v1', '1'); return; }
-
-    try {
-        for (const item of wardrobeItems) {
-            if (item.image) item.image = await trimTransparentPadding(item.image);
-        }
-        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
-
-        const outfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-        let changed = false;
-        outfits.forEach(o => {
-            if (!Array.isArray(o.items)) return;
-            o.items.forEach(it => {
-                const fresh = wardrobeItems.find(w => String(w.id) === String(it.id));
-                if (fresh && fresh.image) { it.image = fresh.image; changed = true; }
-            });
-        });
-        if (changed) localStorage.setItem('kombina_outfits', JSON.stringify(outfits));
-
-        localStorage.setItem('kombina_trimmed_v1', '1');
-        applyFilters();
-    } catch (err) {
-        console.warn('Migración de recorte omitida:', err);
-    }
+    localStorage.setItem('kombina_trimmed_v1', '1');
 }
 
-// Reduce la foto antes de procesarla: una foto de móvil de 12 MP tarda mucho más que una de 768 px
 function downscaleImage(file, maxSize = 768) {
     return new Promise((resolve) => {
         const img = new Image();
@@ -426,28 +444,7 @@ function downscaleImage(file, maxSize = 768) {
     });
 }
 
-function setSaveButtonLoading(isLoading) {
-    const btn = document.getElementById('saveItemBtn');
-    if (!btn) return;
-    btn.disabled = isLoading;
-    btn.style.opacity = isLoading ? '0.6' : '1';
-    btn.textContent = isLoading ? 'Procesando...' : 'Guardar';
-}
-
-function saveWardrobe() {
-    try {
-        localStorage.setItem('kombina_wardrobe', JSON.stringify(wardrobeItems));
-        return true;
-    } catch (err) {
-        console.error('No se pudo guardar en localStorage:', err);
-        alert('No hay espacio suficiente para guardar más prendas. Elimina alguna e inténtalo de nuevo.');
-        return false;
-    }
-}
-
 // --- COLA DE PROCESADO EN SEGUNDO PLANO ---
-// Al pulsar Guardar se cierra el modal al instante y la IA trabaja de fondo.
-// Las prendas se procesan de una en una para no saturar el móvil.
 let pendingItems = 0;
 let processingQueue = Promise.resolve();
 
@@ -460,7 +457,6 @@ function updateProcessingBadge() {
     if (!badge) {
         badge = document.createElement('div');
         badge.id = 'processingBadge';
-        // Abajo, por encima de la barra de navegación (más arriba si está el botón "Terminar selección")
         const bottom = document.getElementById('finishSelectionBtn') ? 200 : 145;
         badge.style.cssText = 'position:fixed;bottom:' + bottom + 'px;left:50%;transform:translateX(-50%);z-index:1200;background:#111;color:#fff;padding:8px 16px;border-radius:999px;font-size:0.8rem;font-weight:500;box-shadow:0 6px 18px rgba(0,0,0,0.2);display:flex;align-items:center;gap:8px;';
         document.body.appendChild(badge);
@@ -476,7 +472,6 @@ function updateProcessingBadge() {
     }
 }
 
-// Avisa si intentas cerrar la página mientras aún se está procesando
 window.addEventListener('beforeunload', (e) => {
     if (pendingItems > 0) { e.preventDefault(); e.returnValue = ''; }
 });
@@ -488,35 +483,40 @@ async function processAndSaveItem({ file, name, category }) {
 
         let imageBlob;
         try {
-            // Intenta usar la tarjeta gráfica (WebGPU): mucho más rápido si el dispositivo la soporta
             imageBlob = await removeBgFn(smallFile, { ...BG_CONFIG, device: 'gpu' });
         } catch (gpuErr) {
-            console.warn('[IA] GPU no disponible, usando CPU:', gpuErr);
             imageBlob = await removeBgFn(smallFile, { ...BG_CONFIG, device: 'cpu' });
         }
 
         const processedBase64 = await trimTransparentPadding(imageBlob);
+        const userId = localStorage.getItem('kombina_user_id');
 
-        const newItem = {
-            id: Date.now() + Math.floor(Math.random() * 1000),
+        const newItemData = {
             name: name || 'Prenda sin nombre',
             category: category,
-            image: processedBase64
+            image: processedBase64,
+            userId: userId
         };
 
-        wardrobeItems.push(newItem);
-        if (!saveWardrobe()) {
-            wardrobeItems.pop();
-            return;
-        }
+        // Guardar directamente en MongoDB Atlas a través del servidor
+        const response = await fetch('/api/clothing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newItemData)
+        });
+
+        if (!response.ok) throw new Error('Error al guardar la prenda en el servidor');
+
+        const data = await response.json();
+        wardrobeItems.push(data.item);
 
         applyFilters();
         if (typeof profileNotify === 'function') {
             profileNotify('¡Prenda añadida con éxito!');
         }
     } catch (error) {
-        console.error('Error al quitar el fondo con IA:', error);
-        alert('Hubo un error al procesar la imagen con IA. Revisa la consola (F12) para más detalles.');
+        console.error('Error al procesar o guardar la prenda:', error);
+        alert('Hubo un error al guardar la prenda en la base de datos.');
     } finally {
         pendingItems--;
         updateProcessingBadge();
@@ -538,18 +538,15 @@ function addNewItem() {
 
     const file = imageInput.files[0];
 
-    // Cierra el modal ya: no hace falta esperar a la IA
     closeAddModal();
 
     pendingItems++;
     updateProcessingBadge();
 
-    // Encola el trabajo para procesarlo después del anterior
     processingQueue = processingQueue.then(() => processAndSaveItem({ file, name, category }));
 }
 
 
-// --- MODAL DE CONFIRMACIÓN PARA ELIMINAR ---
 function showAestheticConfirm(message, onConfirm) {
     const existing = document.getElementById('aestheticConfirmModal');
     if (existing) existing.remove();
