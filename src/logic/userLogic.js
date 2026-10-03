@@ -19,6 +19,7 @@ const registerUser = async (userDataObj) => {
   return userData.addUser(newUser);
 };
 
+
 const loginUser = async (email, password) => {
   const user = userData.findUserByEmail(email);
   if (!user) {
