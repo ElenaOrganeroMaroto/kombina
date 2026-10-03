@@ -1,9 +1,21 @@
-// Este script inyecta la barra de navegación móvil en cualquier vista que tenga un contenedor con id="bottom-nav-container"
+// Este script protege las rutas privadas e inyecta la barra de navegación móvil
 document.addEventListener("DOMContentLoaded", () => {
+    // 1. COMPROBACIÓN DE SESIÓN (Protección de rutas)
+    const currentUser = localStorage.getItem('kombina_user');
+    const currentPage = window.location.pathname.split('/').pop();
+    
+    // Páginas que son públicas y no requieren inicio de sesión
+    const publicPages = ['', 'index.html', 'login.html']; // Añade aquí si tienes alguna otra pública
+
+    // Si no hay usuario logueado y la página actual NO es pública, redirigimos al login
+    if (!currentUser && !publicPages.includes(currentPage)) {
+        window.location.href = 'index.html';
+        return; // Detenemos la ejecución del script
+    }
+
+    // 2. INYECCIÓN DE LA BARRA DE NAVEGACIÓN MÓVIL
     const navContainer = document.getElementById('bottom-nav-container');
     if (navContainer) {
-        const currentPage = window.location.pathname.split('/').pop();
-
         navContainer.innerHTML = `
             <nav class="bottom-nav">
                 <a href="wardrobe.html" class="${currentPage === 'wardrobe.html' ? 'active' : ''}">
