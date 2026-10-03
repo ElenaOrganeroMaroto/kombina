@@ -1,8 +1,7 @@
 // --- GESTIÓN DINÁMICA DEL CALENDARIO ---
 //
-// Las asignaciones se guardan como { 'AAAA-MM-DD': [idOutfit, idOutfit, ...] } en
-// localStorage ('kombina_calendar_assignments'). Solo se guarda el id: el outfit en sí
-// se lee siempre de 'kombina_outfits', así que si lo borras desaparece también del calendario.
+// Las asignaciones se guardan en MongoDB (/api/calendar) como { 'AAAA-MM-DD': [idOutfit, ...] }.
+// Solo se guarda el id: el outfit en sí se lee siempre de la API (MongoDB, /api/outfits), así que si lo borras desaparece también del calendario.
 //
 // Flujos:
 //  1) Calendario -> "+ Asignar outfit" -> profile.html?mode=assign&date=AAAA-MM-DD
@@ -10,7 +9,50 @@
 //  2) Perfil / Crear outfit -> "Asignar" -> calendar.html?assign=ID
 //     (eliges el día y confirmas)
 
-const ASSIGNMENTS_KEY = 'kombina_calendar_assignments';
+
+// Outfits del usuario cargados desde MongoDB
+let calendarOutfits = [];
+let calendarOutfitsLoaded = false;
+
+// Asignaciones { fecha: [idOutfit] } cargadas desde MongoDB
+let calendarAssignments = {};
+let assignmentsSnapshot = {};      // último estado conocido del servidor (para saber qué días cambiaron)
+let calendarAssignmentsLoaded = false;
+
+async function loadCalendarOutfitsFromServer() {
+    await loadCalendarAssignmentsFromServer();
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) { calendarOutfits = []; calendarOutfitsLoaded = true; return; }
+        const res = await fetch(`/api/outfits?userId=${userId}`);
+        if (!res.ok) throw new Error('Error al cargar outfits');
+        calendarOutfits = await res.json();
+        calendarOutfitsLoaded = true;
+    } catch (err) {
+        console.error('Error cargando outfits en el calendario:', err);
+        calendarOutfits = [];
+        calendarOutfitsLoaded = false; // no podar asignaciones si falló la carga
+    }
+}
+
+async function loadCalendarAssignmentsFromServer() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) { calendarAssignments = {}; assignmentsSnapshot = {}; calendarAssignmentsLoaded = true; return; }
+        const res = await fetch(`/api/calendar?userId=${userId}`);
+        if (!res.ok) throw new Error('Error al cargar el calendario');
+        calendarAssignments = await res.json();
+        assignmentsSnapshot = JSON.parse(JSON.stringify(calendarAssignments));
+        calendarAssignmentsLoaded = true;
+    } catch (err) {
+        console.error('Error cargando asignaciones del calendario:', err);
+        calendarAssignments = {};
+        assignmentsSnapshot = {};
+        calendarAssignmentsLoaded = false; // sin datos del servidor no se permite guardar
+    }
+}
+
+function outfitIdOf(o) { return String(o._id || o.id); }
 
 // Ruta de este mismo script: sirve para encontrar create-outfit.js aunque tus .js estén en una carpeta
 const CALENDAR_SCRIPT_SRC = (document.currentScript && document.currentScript.src) || '';
@@ -40,7 +82,7 @@ let pendingAssignOutfitId = null;  // outfit que viene desde el perfil esperando
 
 document.addEventListener('DOMContentLoaded', () => {
     if (!document.getElementById('calendarGrid')) return;
-    ensureOutfitRenderer().then(renderCalendar);
+    ensureOutfitRenderer().then(loadCalendarOutfitsFromServer).then(renderCalendar);
 });
 
 // El dibujo del outfit (buildOutfitCanvasHTML) vive en create-outfit.js.
@@ -75,19 +117,44 @@ function getDateKey(date) {
 }
 
 function loadAssignments() {
-    try { return JSON.parse(localStorage.getItem(ASSIGNMENTS_KEY)) || {}; } catch (e) { return {}; }
+    return calendarAssignments;
 }
 
+// Guarda en MongoDB solo los días que han cambiado respecto al último estado del servidor
 function saveAssignments(assignments) {
-    localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(assignments));
+    if (!calendarAssignmentsLoaded) {
+        calendarNotify('No se pudo cargar tu calendario; recarga la página.');
+        return;
+    }
+    const userId = localStorage.getItem('kombina_user_id');
+    calendarAssignments = assignments;
+
+    const dates = new Set([...Object.keys(assignments), ...Object.keys(assignmentsSnapshot)]);
+    dates.forEach(date => {
+        const now = assignments[date] || [];
+        const before = assignmentsSnapshot[date] || [];
+        if (JSON.stringify(now) === JSON.stringify(before)) return;
+
+        fetch(`/api/calendar/${date}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, outfitIds: now })
+        }).then(res => {
+            if (!res.ok) throw new Error('Error al guardar el calendario');
+        }).catch(err => {
+            console.error(err);
+            calendarNotify('No se pudo guardar el cambio en el calendario.');
+        });
+    });
+    assignmentsSnapshot = JSON.parse(JSON.stringify(assignments));
 }
 
 function loadSavedOutfits() {
-    try { return JSON.parse(localStorage.getItem('kombina_outfits')) || []; } catch (e) { return []; }
+    return calendarOutfits;
 }
 
 function findSavedOutfit(id) {
-    return loadSavedOutfits().find(o => String(o.id) === String(id)) || null;
+    return loadSavedOutfits().find(o => outfitIdOf(o) === String(id)) || null;
 }
 
 // Outfits de un día: [{ entryIndex, outfit }] (ignora los que ya no existen)
@@ -96,7 +163,7 @@ function getOutfitsForDay(dateKey, assignments, outfits) {
     const saved = outfits || loadSavedOutfits();
     const result = [];
     (all[dateKey] || []).forEach((id, entryIndex) => {
-        const outfit = saved.find(o => String(o.id) === String(id));
+        const outfit = saved.find(o => outfitIdOf(o) === String(id));
         if (outfit) result.push({ entryIndex, outfit });
     });
     return result;
@@ -104,11 +171,12 @@ function getOutfitsForDay(dateKey, assignments, outfits) {
 
 // Quita de las asignaciones los outfits que se hayan borrado
 function pruneAssignments() {
+    if (!calendarOutfitsLoaded || !calendarAssignmentsLoaded) return; // sin datos del servidor no se borra nada
     const assignments = loadAssignments();
     const saved = loadSavedOutfits();
     let changed = false;
     Object.keys(assignments).forEach(key => {
-        const valid = (assignments[key] || []).filter(id => saved.some(o => String(o.id) === String(id)));
+        const valid = (assignments[key] || []).filter(id => saved.some(o => outfitIdOf(o) === String(id)));
         if (valid.length !== assignments[key].length) {
             changed = true;
             if (valid.length) assignments[key] = valid; else delete assignments[key];
@@ -226,13 +294,14 @@ function confirmPendingAssign(dateKey) {
 
     const assignments = loadAssignments();
     const list = assignments[dateKey] || [];
-    const existing = list.findIndex(id => String(id) === String(outfit.id));
+    const outfitId = outfitIdOf(outfit);
+    const existing = list.findIndex(id => String(id) === outfitId);
 
     if (existing !== -1) {
         calendarNotify('Ese outfit ya estaba asignado a este día.');
         dailyOutfitIndex = getOutfitsForDay(dateKey, assignments).findIndex(e => e.entryIndex === existing);
     } else {
-        list.push(outfit.id);
+        list.push(outfitId);
         assignments[dateKey] = list;
         saveAssignments(assignments);
         calendarNotify('¡Outfit asignado!');
