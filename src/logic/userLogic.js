@@ -25,7 +25,7 @@ const registerUser = async (userDataObj) => {
   const newUserObj = {
     ...userDataObj,
     password: hashedPassword,
-    isActive: userDataObj.isActive ?? true, // ¡Recuerda poner true si quieres probarlo sin correo!
+    isActive: userDataObj.isActive ?? false, // ¡Recuerda poner true si quieres probarlo sin correo!
     role: userDataObj.role || 'user'
   };
   return await userData.addUser(newUserObj);
