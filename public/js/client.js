@@ -6,23 +6,14 @@ async function registerUser() {
     const msgElement = document.getElementById('mensaje');
 
     try {
-        const response = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            msgElement.style.color = 'green';
-            msgElement.innerText = '¡Registro exitoso! Revisa tu correo.';
-        } else {
-            msgElement.style.color = 'red';
-            msgElement.innerText = data.error || 'Ocurrió un error';
-        }
+        // Llamada a la capa de comunicación separada
+        await apiService.register(email, password);
+        
+        msgElement.style.color = 'green';
+        msgElement.innerText = '¡Registro exitoso! Ya puedes iniciar sesión.';
     } catch (error) {
         msgElement.style.color = 'red';
-        msgElement.innerText = 'Error de conexión con el servidor.';
+        msgElement.innerText = error.message || 'Error de conexión con el servidor.';
     }
 }
 
@@ -35,28 +26,20 @@ async function loginUser() {
     const msgElement = document.getElementById('mensajeLogin');
 
     try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-            msgElement.style.color = 'green';
-            msgElement.innerText = '¡Inicio de sesión exitoso! Redirigiendo...';
-            
-            localStorage.setItem('kombina_user', email);
-            
-            setTimeout(() => {
-                window.location.href = 'wardrobe.html';
-            }, 1000);
-        } else {
-            msgElement.style.color = 'red';
-            msgElement.innerText = data.error || 'Credenciales incorrectas';
-        }
+        // Llamada a la capa de comunicación separada
+        const data = await apiService.login(email, password);
+        
+        msgElement.style.color = 'green';
+        msgElement.innerText = '¡Inicio de sesión exitoso! Redirigiendo...';
+        
+        // Guardamos la sesión en el cliente
+        localStorage.setItem('kombina_user', email);
+        
+        setTimeout(() => {
+            window.location.href = 'wardrobe.html';
+        }, 1000);
     } catch (error) {
         msgElement.style.color = 'red';
-        msgElement.innerText = 'Error de conexión con el servidor.';
+        msgElement.innerText = error.message || 'Error de conexión con el servidor.';
     }
 }
