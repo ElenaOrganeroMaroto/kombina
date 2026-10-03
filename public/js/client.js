@@ -43,3 +43,13 @@ async function loginUser() {
         msgElement.innerText = error.message || 'Error de conexión con el servidor.';
     }
 }
+
+
+//--------- CERRAR SESIÓN (LOGOUT) -------------
+
+function logout() {
+    // Borramos la sesión almacenada en el navegador
+    localStorage.removeItem('kombina_user');
+    // Redirigimos de vuelta a la pantalla de inicio / login
+    window.location.href = 'index.html';
+}

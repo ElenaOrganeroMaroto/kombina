@@ -10,6 +10,7 @@ let assignDateKey = null;
 let assignSelection = [];   
 let assignInitialCount = 0; 
 
+// Lee los parámetros de la URL para activar el modo de asignación de outfits al calendario
 (function readAssignParams() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') !== 'assign') return;
@@ -41,29 +42,35 @@ const PROFILE_ICONS = {
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>'
 };
 
+// Genera una etiqueta SVG basada en el nombre del icono solicitado
 function profileIcon(name) {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PROFILE_ICONS[name]}</svg>`;
 }
 
+// Escapa caracteres especiales en strings HTML para evitar inyecciones o errores de renderizado
 function escapeHTML(str) {
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// Inicializa la pantalla del perfil una vez cargado el DOM
 document.addEventListener('DOMContentLoaded', () => {
     renderProfileScreen();
 });
 
+// Cambia entre las diferentes vistas principales del perfil (principal, ajustes, colección)
 function navigateProfile(view, param = null) {
     currentProfileView = view;
     if (param !== null) activeColId = param;
     renderProfileScreen();
 }
 
+// Cambia la pestaña activa dentro del perfil (entre 'outfits' y 'colecciones')
 function switchProfileTab(tab) {
     activeProfileTab = tab;
     renderProfileScreen();
 }
 
+// Renderiza dinámicamente el contenido del perfil según la vista actual seleccionada
 function renderProfileScreen() {
     const container = document.getElementById('profileDynamicContent');
     if (!container) return;
@@ -80,6 +87,7 @@ function renderProfileScreen() {
     updateAssignFloatingButton();
 }
 
+// Ajusta dinámicamente la altura de la cuadrícula de elementos del perfil
 function fitProfileGrid() {
     const scroller = document.querySelector('.profile-grid-scroll');
     if (!scroller) return;
@@ -92,6 +100,7 @@ window.addEventListener('resize', fitProfileGrid);
 window.addEventListener('load', fitProfileGrid);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitProfileGrid);
 
+// Genera la vista previa en miniatura de un outfit
 function getOutfitPreviewHTML(outfit) {
     if (!outfit.items || !outfit.items.length || typeof buildOutfitCanvasHTML !== 'function') {
         return `<div class="outfit-preview-empty">${profileIcon('hanger')}</div>`;
@@ -103,6 +112,7 @@ function getOutfitPreviewHTML(outfit) {
     `;
 }
 
+// Genera el HTML para las secciones futuras (Comunidad y Sugerencias IA)
 function getFutureFeaturesHTML() {
     return `
         <div class="profile-future-box">
@@ -133,6 +143,7 @@ function getFutureFeaturesHTML() {
     `;
 }
 
+// Genera el HTML correspondiente a la pantalla principal del perfil de usuario
 function getMainProfileHTML() {
     const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
     const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
@@ -233,7 +244,7 @@ function getMainProfileHTML() {
     `;
 }
 
-// --- MODAL DE EDITAR PERFIL (Nombre, Handle, Bio y Opción de quitar foto) ---
+// Abre el modal para editar los datos personales del perfil (nombre, handle, bio, avatar)
 function openEditProfileModal() {
     ensureOverlayStyles();
     const old = document.getElementById('kombinaConfirmOverlay');
@@ -302,6 +313,7 @@ function openEditProfileModal() {
     document.body.appendChild(overlay);
 }
 
+// Renderiza la vista detallada del contenido de una colección específica
 function renderCollectionDetailView(container, colId) {
     const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
     const col = collections.find(c => String(c.id) === String(colId));
@@ -345,6 +357,7 @@ function renderCollectionDetailView(container, colId) {
     `;
 }
 
+// Habilita el modo de edición en línea del nombre de una colección
 function enableCollectionNameEdit(colId) {
     const nameDisplay = document.getElementById(`collectionNameDisplay-${colId}`);
     if (!nameDisplay) return;
@@ -359,6 +372,7 @@ function enableCollectionNameEdit(colId) {
     if (inputField) inputField.focus();
 }
 
+// Guarda el nuevo nombre modificado de una colección en el almacenamiento local
 function saveCollectionName(colId) {
     const inputField = document.getElementById(`edit-collection-input-${colId}`);
     if (!inputField) return;
@@ -376,7 +390,7 @@ function saveCollectionName(colId) {
     }
 }
 
-// --- VISTA DE AJUSTES SIMPLIFICADA (Sin notificaciones ni idioma) ---
+// Renderiza la vista de ajustes de la aplicación (cerrar sesión y eliminar cuenta)
 function renderSettingsView(container) {
     container.innerHTML = `
         <div class="profile-subview-header">
@@ -405,31 +419,55 @@ function renderSettingsView(container) {
     `;
 }
 
+// Gestiona el proceso de cierre de sesión (borra credenciales y redirige al index.html)
 function handleLogout() {
     profileConfirm({
         title: 'Cerrar sesión',
         message: '¿Estás seguro de que deseas cerrar sesión?',
         confirmText: 'Cerrar sesión',
         onConfirm: () => {
+            // 1. Borramos la sesión del almacenamiento local
+            localStorage.removeItem('kombina_user');
+            
             profileNotify('Sesión cerrada correctamente');
-            setTimeout(() => { window.location.reload(); }, 1000);
+            
+            // 2. Redirigimos al index.html (pantalla de login)
+            setTimeout(() => { window.location.href = 'index.html'; }, 1000);
         }
     });
 }
 
+// Gestiona el borrado total de la cuenta tanto en el servidor como limpiando el navegador
 function handleDeleteAccount() {
     profileConfirm({
         title: 'Eliminar cuenta',
         message: 'Se borrarán permanentemente tu armario, tus outfits y tus colecciones. Esta acción no se puede deshacer.',
         confirmText: 'Eliminar todo',
-        onConfirm: () => {
-            localStorage.clear();
-            profileNotify('Cuenta eliminada');
-            setTimeout(() => { window.location.reload(); }, 1000);
+        onConfirm: async () => {
+            try {
+                const currentUser = localStorage.getItem('kombina_user');
+                
+                // Si existe apiService, enviamos la petición al servidor para borrarla de su base de datos/memoria
+                if (typeof apiService !== 'undefined' && currentUser) {
+                    await apiService.deleteAccount(currentUser);
+                }
+
+                // Limpiamos todo el almacenamiento local del cliente
+                localStorage.clear();
+                
+                profileNotify('Cuenta eliminada');
+                setTimeout(() => { 
+                    window.location.href = 'index.html'; 
+                }, 1000);
+
+            } catch (error) {
+                profileNotify(error.message || 'Error al eliminar la cuenta');
+            }
         }
     });
 }
 
+// Carga los datos guardados del usuario (avatar, nombre, handle y biografía) en la cabecera del perfil
 function loadProfileHeaderData() {
     const avatar = localStorage.getItem('kombina_user_avatar');
     const img = document.getElementById('profileAvatarImg');
@@ -465,6 +503,7 @@ function loadProfileHeaderData() {
     }
 }
 
+// Actualiza y guarda la nueva foto de perfil subida por el usuario
 function updateProfileAvatar(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -477,6 +516,7 @@ function updateProfileAvatar(e) {
     reader.readAsDataURL(file);
 }
 
+// Muestra un modal de entrada para que el usuario asigne un nombre y cree una nueva colección
 function createNewCollectionPrompt() {
     ensureOverlayStyles();
     const old = document.getElementById('kombinaConfirmOverlay');
@@ -528,14 +568,17 @@ function createNewCollectionPrompt() {
     if (inputField) inputField.focus();
 }
 
+// Carga las asignaciones de outfits guardadas en el calendario
 function loadCalendarAssignments() {
     try { return JSON.parse(localStorage.getItem('kombina_calendar_assignments')) || {}; } catch (e) { return {}; }
 }
 
+// Guarda las asignaciones de outfits actualizadas en el calendario
 function saveCalendarAssignments(assignments) {
     localStorage.setItem('kombina_calendar_assignments', JSON.stringify(assignments));
 }
 
+// Elimina un outfit de todas las fechas del calendario donde estuviera asignado
 function purgeOutfitFromCalendar(outfitId) {
     const assignments = loadCalendarAssignments();
     Object.keys(assignments).forEach(key => {
@@ -545,21 +588,25 @@ function purgeOutfitFromCalendar(outfitId) {
     saveCalendarAssignments(assignments);
 }
 
+// Devuelve la clave de la fecha actual en formato 'YYYY-MM-DD'
 function getTodayDateKey() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Formatea una clave de fecha a un formato legible largo en castellano (ej: '3 de octubre de 2026')
 function formatDateKeyLong(key) {
     const [y, m, d] = String(key).split('-');
     const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     return `${parseInt(d)} de ${months[parseInt(m) - 1]} de ${y}`;
 }
 
+// Redimensiona un icono SVG ajustando sus atributos de ancho y alto en píxeles
 function sizedProfileIcon(name, px) {
     return profileIcon(name).replace('<svg ', `<svg width="${px}" height="${px}" `);
 }
 
+// Muestra un mensaje flotante de notificación (toast) temporal al usuario
 function profileNotify(message) {
     if (typeof showInAppToast === 'function') return showInAppToast(message);
     const old = document.getElementById('profileToast');
@@ -572,6 +619,7 @@ function profileNotify(message) {
     setTimeout(() => toast.remove(), 2000);
 }
 
+// Asegura que existan los estilos CSS globales necesarios para los modales y barras de desplazamiento
 function ensureOverlayStyles() {
     if (document.getElementById('kombinaOverlayStyles')) return;
     const style = document.createElement('style');
@@ -583,6 +631,7 @@ function ensureOverlayStyles() {
     document.head.appendChild(style);
 }
 
+// Muestra un diálogo de confirmación personalizado antes de realizar acciones críticas (eliminar, salir, etc.)
 function profileConfirm({ title, message, confirmText = 'Eliminar', onConfirm }) {
     ensureOverlayStyles();
     const old = document.getElementById('kombinaConfirmOverlay');
@@ -609,6 +658,7 @@ function profileConfirm({ title, message, confirmText = 'Eliminar', onConfirm })
     document.body.appendChild(overlay);
 }
 
+// Genera el HTML de una tarjeta individual de outfit en la cuadrícula (según esté en modo selección o normal)
 function getOutfitTileHTML(outfit, inCollection) {
     if (assignMode) {
         const selected = assignSelection.includes(String(outfit.id));
@@ -629,6 +679,7 @@ function getOutfitTileHTML(outfit, inCollection) {
     `;
 }
 
+// Abre un menú modal con las opciones de gestión disponibles para un outfit seleccionado
 function openOutfitActions(id, inCollection) {
     const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
     const outfit = savedOutfits.find(o => String(o.id) === String(id));
@@ -696,6 +747,7 @@ function openOutfitActions(id, inCollection) {
     document.body.appendChild(overlay);
 }
 
+// Habilita el input de edición de nombre dentro del modal de acciones de un outfit
 function enableModalOutfitNameEdit(id, inCollection) {
     const nameDisplay = document.getElementById(`modalOutfitNameDisplay-${id}`);
     if (!nameDisplay) return;
@@ -712,6 +764,7 @@ function enableModalOutfitNameEdit(id, inCollection) {
     if (inputField) inputField.focus();
 }
 
+// Guarda el nuevo nombre modificado de un outfit específico
 function saveModalOutfitName(id, inCollection) {
     const inputField = document.getElementById(`edit-modal-outfit-input-${id}`);
     if (!inputField) return;
@@ -731,21 +784,25 @@ function saveModalOutfitName(id, inCollection) {
     }
 }
 
+// Cierra el modal de acciones de los outfits
 function closeOutfitActions() {
     const overlay = document.getElementById('outfitActionOverlay');
     if (overlay) overlay.remove();
 }
 
+// Escucha la tecla Escape para cerrar modales abiertos de forma rápida
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const confirmBox = document.getElementById('kombinaConfirmOverlay');
     if (confirmBox) confirmBox.remove(); else closeOutfitActions();
 });
 
+// Redirige al calendario para asignar un outfit concreto
 function assignOutfitToCalendar(id) {
     window.location.href = 'calendar.html?assign=' + encodeURIComponent(id);
 }
 
+// Elimina un outfit por su ID y lo limpia también de las asignaciones del calendario
 function deleteOutfitById(id) {
     profileConfirm({
         title: 'Eliminar outfit',
@@ -763,6 +820,7 @@ function deleteOutfitById(id) {
     });
 }
 
+// Alterna la visibilidad de la lista desplegable para mover outfits entre colecciones
 function toggleMoveList() {
     const list = document.getElementById('moveCollectionList');
     const chevron = document.getElementById('moveChevron');
@@ -773,6 +831,7 @@ function toggleMoveList() {
     if (open) list.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
+// Mueve un outfit de una colección a otra (o lo deja sin colección)
 function moveOutfitToCollection(outfitId, targetColId) {
     const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
     const idx = savedOutfits.findIndex(o => String(o.id) === String(outfitId));
@@ -795,6 +854,7 @@ function moveOutfitToCollection(outfitId, targetColId) {
     profileNotify(targetColId ? `Movido a «${destino}»` : 'Movido a Outfits');
 }
 
+// Genera el banner informativo superior cuando se activa el modo de asignación de outfits
 function getAssignBannerHTML() {
     return `
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #ece5d8; border: 1px solid #ddd3c1; color: #2c2c2c; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px;">
@@ -807,6 +867,7 @@ function getAssignBannerHTML() {
     `;
 }
 
+// Alterna la selección de un outfit en el modo de asignación masiva al calendario
 function toggleAssignSelection(id) {
     const sid = String(id);
     const pos = assignSelection.indexOf(sid);
@@ -820,6 +881,7 @@ function toggleAssignSelection(id) {
     updateAssignFloatingButton();
 }
 
+// Muestra u oculta el botón flotante para confirmar la selección de outfits en el calendario
 function updateAssignFloatingButton() {
     let btn = document.getElementById('finishSelectionBtn');
 
@@ -851,6 +913,7 @@ function updateAssignFloatingButton() {
     }
 }
 
+// Confirma y guarda en el almacenamiento local los outfits seleccionados para una fecha del calendario
 function confirmAssignOutfits() {
     const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
     const ids = assignSelection
@@ -873,12 +936,14 @@ function confirmAssignOutfits() {
     window.location.href = 'calendar.html?date=' + encodeURIComponent(key);
 }
 
+// Cancela el modo de asignación y regresa al calendario
 function cancelAssignMode() {
     const key = assignDateKey;
     assignMode = false;
     window.location.href = 'calendar.html?date=' + encodeURIComponent(key);
 }
 
+// Elimina una colección completa, retirando sus outfits del calendario o de la lista general
 function deleteCollection(colId) {
     const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
     const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];

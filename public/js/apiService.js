@@ -8,9 +8,7 @@ const apiService = {
             body: JSON.stringify({ email, password })
         });
         const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Ocurrió un error en el registro');
-        }
+        if (!response.ok) throw new Error(data.error || 'Error en el registro');
         return data;
     },
 
@@ -21,9 +19,21 @@ const apiService = {
             body: JSON.stringify({ email, password })
         });
         const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Credenciales incorrectas');
-        }
-        return data; // Devuelve los datos del usuario/login exitoso
+        if (!response.ok) throw new Error(data.error || 'Credenciales incorrectas');
+        return data;
+    },
+
+    async deleteAccount(email) {
+        const response = await fetch('/api/account', {
+            method: 'DELETE',
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-user-email': email
+            },
+            body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudo eliminar la cuenta');
+        return data;
     }
 };
