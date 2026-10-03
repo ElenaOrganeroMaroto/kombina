@@ -21,6 +21,7 @@ if (process.env.NODE_ENV !== 'test') {
     .catch((err) => console.error('🔴 Error conectando a MongoDB:', err));
 }
 
+
 const userLogic = require('../logic/userLogic');
 const { verifyAuth, verifyAdmin } = require('../middleware/authMiddleware');
 
