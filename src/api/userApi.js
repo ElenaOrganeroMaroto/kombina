@@ -1,10 +1,13 @@
+require('dotenv').config(); // <-- 1. ¡Siempre lo primero de todo!
+
 const express = require('express');
-const path = require('path'); // 1. Importante para manejar rutas de carpetas
+const path = require('path');
+const mongoose = require('mongoose'); // 2. Importar mongoose para la base de datos
 const app = express();
 
 app.use(express.json());
 
-// 2. Servir la carpeta 'public' (subiendo dos niveles desde src/api hasta la raíz)
+// 3. Servir la carpeta 'public' (subiendo dos niveles desde src/api hasta la raíz)
 app.use(express.static(path.join(__dirname, '../../public')));
 
 /* Comentamos esto para que no intercepte la ruta raíz '/' y cargue el index.html
@@ -13,8 +16,16 @@ app.get('/', (req, res) => {
 });
 */
 
+// 4. Conexión a MongoDB Atlas usando la variable de entorno
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (process.env.NODE_ENV !== 'test') {
+  mongoose.connect(MONGODB_URI)
+    .then(() => console.log('🟢 Conectado exitosamente a MongoDB Atlas'))
+    .catch((err) => console.error('🔴 Error conectando a MongoDB:', err));
+}
+
 const userLogic = require('../logic/userLogic');
-// Ojo: mantengo 'middlerware' tal cual lo tienes en tu carpeta o cámbialo si lo renombraste
 const { verifyAuth, verifyAdmin } = require('../middleware/authMiddleware');
 
 // Ruta de registro (asíncrona por bcrypt)
