@@ -6,8 +6,6 @@
     <title>Kombina - Mi Armario</title>
     <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- La librería de IA para quitar el fondo se carga desde wardrobe.js (import dinámico) -->
 </head>
 <body>
 
@@ -44,7 +42,7 @@
             <input type="text" id="searchInput" placeholder="Buscar prenda..." oninput="filterWardrobe()" style="width: 100%; padding: 10px 12px; border: 1px solid #e0dad0; border-radius: 8px; font-size: 0.9rem; box-sizing: border-box; background: #ffffff;">
         </div>
 
-        <!-- Filtros horizontales superiores (Categorías) -->
+        <!-- Filtros horizontales superiores (Categorías ampliadas) -->
         <div class="chip-filters-container" style="padding: 0 1.5rem 1rem 1.5rem;">
             <div class="chip-filters" id="categoryChips">
                 <button class="chip active" onclick="filterByCategory('Todo', this)">Todo</button>
@@ -52,6 +50,14 @@
                 <button class="chip" onclick="filterByCategory('Pantalones', this)">Pantalones</button>
                 <button class="chip" onclick="filterByCategory('Faldas', this)">Faldas</button>
                 <button class="chip" onclick="filterByCategory('Vestidos', this)">Vestidos</button>
+                <button class="chip" onclick="filterByCategory('Jersey', this)">Jersey</button>
+                <button class="chip" onclick="filterByCategory('Sudadera', this)">Sudadera</button>
+                <button class="chip" onclick="filterByCategory('Abrigo', this)">Abrigo</button>
+                <button class="chip" onclick="filterByCategory('Zapatos', this)">Zapatos</button>
+                <button class="chip" onclick="filterByCategory('Bolso', this)">Bolso</button>
+                <button class="chip" onclick="filterByCategory('Gorro', this)">Gorro</button>
+                <button class="chip" onclick="filterByCategory('Gafas', this)">Gafas</button>
+                <button class="chip" onclick="filterByCategory('Accesorio', this)">Accesorio</button>
             </div>
         </div>
 
@@ -81,8 +87,16 @@
             <select id="itemCategory" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #e0dad0; border-radius: 8px; box-sizing: border-box; background: #fbf9f5; font-size: 0.9rem;">
                 <option value="Tops">Tops</option>
                 <option value="Pantalones">Pantalones</option>
+                <option value="Jersey">Jersey</option>
+                <option value="Sudadera">Sudadera</option>
+                <option value="Abrigo">Abrigo</option>
                 <option value="Faldas">Faldas</option>
                 <option value="Vestidos">Vestidos</option>
+                <option value="Zapatos">Zapatos</option>
+                <option value="Bolso">Bolso</option>
+                <option value="Gorro">Gorro</option>
+                <option value="Gafas">Gafas</option>
+                <option value="Accesorio">Accesorio</option>
             </select>
             
             <div style="display: flex; gap: 10px;">
@@ -91,7 +105,6 @@
             </div>
         </div>
     </div>
-
 
     <script src="/js/layout.js"></script>
     <script src="/js/wardrobe.js"></script>
