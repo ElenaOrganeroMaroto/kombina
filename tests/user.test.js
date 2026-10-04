@@ -14,7 +14,12 @@ beforeAll(async () => {
 
   if (mongoose.connection.readyState === 0) {
     // Falla pronto y con un mensaje claro si no hay base de datos disponible
-    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+    // runtimeAdapters: el driver de MongoDB 7.x carga 'os' con import() dinámico, que Jest no soporta
+    // por defecto; sin esto envía un saludo vacío y el servidor rechaza la conexión.
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+      runtimeAdapters: { os: require('os') }
+    });
   }
 }, 20000);
 
