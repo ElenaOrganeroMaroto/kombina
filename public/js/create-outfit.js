@@ -1,24 +1,16 @@
-// --- GESTIÓN DE OUTFITS Y SELECCIÓN INDEPENDIENTE POR CATEGORÍA ---
+// --- GESTIÓN DE OUTFITS Y SELECCIÓN INDEPENDIENTE POR CATEGORÍA (CONECTADO A MONGODB) ---
 
-// Modo selección: se lee de la URL UNA vez y se quita de la barra de direcciones,
-// así que al recargar la página se vuelve al armario normal.
-function isSelectMode() {
-    if (window.__kombinaSelectMode === undefined) {
-        window.__kombinaSelectMode = new URLSearchParams(window.location.search).get('mode') === 'select';
-        if (window.__kombinaSelectMode) {
-            history.replaceState(null, '', window.location.pathname);
-        }
-    }
-    return window.__kombinaSelectMode;
-}
+let savedOutfits = [];
+let savedCollections = [];
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     migrateSavedOutfits();
+    await loadOutfitsFromServer();
+
     const inSelectMode = isSelectMode();
     const onOutfitPage = !!document.getElementById('selectedOutfitItems');
     const onWardrobePage = !!document.getElementById('wardrobeGrid');
 
-    // El borrador de outfit solo sobrevive mientras estás eligiendo prendas
     if (onWardrobePage) {
         if (inSelectMode) {
             sessionStorage.setItem('kombina_keep_temp', '1');
@@ -28,9 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } else if (onOutfitPage) {
         if (sessionStorage.getItem('kombina_keep_temp')) {
-            sessionStorage.removeItem('kombina_keep_temp'); // vienes del selector: conserva la selección
+            sessionStorage.removeItem('kombina_keep_temp');
         } else {
-            localStorage.removeItem('kombina_temp_outfit'); // entrada nueva: outfit vacío
+            localStorage.removeItem('kombina_temp_outfit');
         }
     }
 
@@ -48,6 +40,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Cargar outfits desde el servidor
+async function loadOutfitsFromServer() {
+    try {
+        const userId = localStorage.getItem('kombina_user_id');
+        if (!userId) {
+            savedOutfits = [];
+            return;
+        }
+        const response = await fetch(`/api/outfits?userId=${userId}`);
+        if (!response.ok) throw new Error('Error al cargar los outfits');
+        savedOutfits = await response.json();
+
+        const colRes = await fetch(`/api/collections?userId=${userId}`);
+        if (colRes.ok) {
+            const cols = await colRes.json();
+            savedCollections = cols.map(c => ({ ...c, id: c._id }));
+        }
+    } catch (err) {
+        console.error('Error al conectar con la API de outfits:', err);
+        savedOutfits = [];
+    }
+}
+
+function isSelectMode() {
+    if (window.__kombinaSelectMode === undefined) {
+        window.__kombinaSelectMode = new URLSearchParams(window.location.search).get('mode') === 'select';
+        if (window.__kombinaSelectMode) {
+            history.replaceState(null, '', window.location.pathname);
+        }
+    }
+    return window.__kombinaSelectMode;
+}
+
 function goToWardrobeSelector() {
     window.location.href = 'wardrobe.html?mode=select';
 }
@@ -58,7 +83,7 @@ function injectSelectionFloatingButton() {
     const btn = document.createElement('button');
     btn.id = 'finishSelectionBtn';
     btn.innerHTML = '✓ Terminar selección';
-    btn.style.bottom = '90px'; // por encima de la barra de navegación
+    btn.style.bottom = '90px';
     
     btn.onclick = () => {
         window.location.href = 'create-outfit.html';
@@ -73,7 +98,7 @@ function highlightSelectedCards() {
     
     cards.forEach((card, index) => {
         let item = extractItemFromCard(card, index);
-        const isSelected = tempOutfit.some(i => String(i.id) === String(item.id));
+        const isSelected = tempOutfit.some(i => String(i._id || i.id) === String(item._id || item.id));
         
         if (isSelected) {
             card.style.border = '2px solid #222';
@@ -88,8 +113,8 @@ function highlightSelectedCards() {
 
 function extractItemFromCard(card, index = 0) {
     const cardId = card.getAttribute('data-id');
-    if (cardId) {
-        const found = wardrobeItems.find(i => String(i.id) === String(cardId));
+    if (cardId && typeof wardrobeItems !== 'undefined') {
+        const found = wardrobeItems.find(i => String(i._id || i.id) === String(cardId));
         if (found) return found;
     }
 
@@ -101,13 +126,12 @@ function extractItemFromCard(card, index = 0) {
         id: cardId || (itemName + '-' + index),
         name: itemName,
         image: imgEl ? imgEl.src : '',
-        category: card.getAttribute('data-category') || currentCategory
+        category: card.getAttribute('data-category') || 'Todo'
     };
 }
 
 function getCategoryGroup(cat) {
     if (!cat) return 'otro';
-    // minúsculas y sin tildes (pañuelo -> panuelo) para comparar de forma tolerante
     cat = String(cat).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
     const rules = [
@@ -129,7 +153,6 @@ function getCategoryGroup(cat) {
     return cat;
 }
 
-// Grupo de una prenda: por su categoría y, si no se reconoce, por su nombre ("jeans", "top bordado"...)
 function getItemGroup(item) {
     const g = getCategoryGroup(item && item.category);
     if (OUTFIT_SLOTS[g]) return g;
@@ -137,15 +160,16 @@ function getItemGroup(item) {
     return OUTFIT_SLOTS[byName] ? byName : g;
 }
 
-// Lógica de selección independiente por categoría (llamada desde wardrobe.js)
 function toggleOutfitSelection(item) {
     let tempOutfit = JSON.parse(localStorage.getItem('kombina_temp_outfit')) || [];
     const itemGroup = getItemGroup(item);
+    const itemId = item._id || item.id;
 
     const existingIndex = tempOutfit.findIndex(i => getItemGroup(i) === itemGroup);
     
     if (existingIndex !== -1) {
-        if (String(tempOutfit[existingIndex].id) === String(item.id)) {
+        const existingId = tempOutfit[existingIndex]._id || tempOutfit[existingIndex].id;
+        if (String(existingId) === String(itemId)) {
             tempOutfit.splice(existingIndex, 1);
         } else {
             tempOutfit[existingIndex] = item;
@@ -162,7 +186,6 @@ function escapeOutfitText(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Dibuja el outfit en construcción: vista previa en vivo (con botón "+") y fila de prendas
 function renderSelectedOutfitPreview() {
     const stage = document.getElementById('selectedOutfitItems');
     if (!stage) return;
@@ -204,7 +227,6 @@ function removeTempOutfitItem(index) {
     renderSelectedOutfitPreview();
 }
 
-// "Generar outfit": abre el panel para nombrar y guardar el outfit (la vista previa ya está en pantalla)
 function generateAndSaveOutfit() {
     const selectedItems = JSON.parse(localStorage.getItem('kombina_temp_outfit')) || [];
     if (selectedItems.length === 0) {
@@ -220,7 +242,7 @@ function generateAndSaveOutfit() {
     builder.appendChild(savePanel);
 
     const defaultName = 'Mi Outfit ' + new Date().toLocaleDateString();
-    const collections = JSON.parse(localStorage.getItem('kombina_collections')) || [];
+    const collections = savedCollections;
     let collectionsOptions = `<option value="">Ninguna (Solo en Outfits)</option>`;
     collections.forEach(col => {
         collectionsOptions += `<option value="${escapeOutfitText(col.id)}">${escapeOutfitText(col.name)}</option>`;
@@ -243,49 +265,54 @@ function generateAndSaveOutfit() {
     updateCreateOutfitLayout();
 }
 
-function confirmSaveOutfit() {
+async function confirmSaveOutfit() {
     const nameInput = document.getElementById('outfitNameInput');
     const collectionSelect = document.getElementById('outfitCollectionSelect');
     
     const outfitName = nameInput ? nameInput.value.trim() : 'Mi Outfit';
     const collectionId = collectionSelect ? collectionSelect.value : '';
     let selectedItems = JSON.parse(localStorage.getItem('kombina_temp_outfit')) || [];
+    const userId = localStorage.getItem('kombina_user_id');
 
     if (selectedItems.length === 0) {
         showInAppToast('No hay prendas seleccionadas.');
         return;
     }
 
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const newOutfit = {
-        id: Date.now(),
+    const newOutfitData = {
         name: outfitName,
-        items: selectedItems
+        items: selectedItems,
+        collectionId: collectionId || null,
+        userId: userId
     };
 
-    if (collectionId) {
-        newOutfit.collectionId = collectionId;
-    }
-
-    savedOutfits.push(newOutfit);
     try {
-        localStorage.setItem('kombina_outfits', JSON.stringify(savedOutfits));
+        const response = await fetch('/api/outfits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newOutfitData)
+        });
+
+        if (!response.ok) throw new Error('Error al guardar el outfit');
+        
+        const data = await response.json();
+        savedOutfits.push(data.outfit);
+
+        localStorage.removeItem('kombina_temp_outfit');
+
+        const savePanel = document.getElementById('inlineSavePanel');
+        if (savePanel) savePanel.remove();
+
+        renderSavedOutfitsList();
+        renderSelectedOutfitPreview();
+        
+        showInAppToast('¡Outfit guardado con éxito!');
+        const savedList = document.getElementById('savedOutfitsList');
+        if (savedList) setTimeout(() => savedList.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
     } catch (err) {
         console.error('No se pudo guardar el outfit:', err);
-        showInAppToast('No se pudo guardar: el almacenamiento está lleno. Elimina alguna prenda u outfit.');
-        return;
+        showInAppToast('No se pudo guardar el outfit en el servidor.');
     }
-    localStorage.removeItem('kombina_temp_outfit');
-
-    const savePanel = document.getElementById('inlineSavePanel');
-    if (savePanel) savePanel.remove();
-
-    renderSavedOutfitsList();
-    renderSelectedOutfitPreview();
-    
-    showInAppToast('¡Outfit guardado con éxito!');
-    const savedList = document.getElementById('savedOutfitsList');
-    if (savedList) setTimeout(() => savedList.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
 }
 
 function showInAppToast(message) {
@@ -313,7 +340,6 @@ function renderSavedOutfitsList() {
     const container = document.getElementById('savedOutfitsList');
     if (!container) return;
 
-    const savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
     container.innerHTML = '';
 
     if (savedOutfits.length === 0) {
@@ -322,6 +348,7 @@ function renderSavedOutfitsList() {
     }
 
     const lastOutfit = savedOutfits[savedOutfits.length - 1];
+    const outfitId = lastOutfit._id || lastOutfit.id;
 
     const card = document.createElement('div');
     card.style.cssText = "background: white; border: 1px solid #eae5de; border-radius: 16px; padding: 15px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.03); margin-top: 10px; text-align: center;";
@@ -334,20 +361,20 @@ function renderSavedOutfitsList() {
 
     card.innerHTML = `
         ${previewHtml}
-        <div id="outfit-title-container-${lastOutfit.id}" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap;">
-            <strong id="outfitNameDisplay-${lastOutfit.id}" style="font-size: 1.1rem; color: #222;">${escapeOutfitText(lastOutfit.name)}</strong>
-            <button class="aesthetic-edit-btn" onclick="enableOutfitNameEdit(${lastOutfit.id})" title="Editar nombre" style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center;">
+        <div id="outfit-title-container-${outfitId}" style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap;">
+            <strong id="outfitNameDisplay-${outfitId}" style="font-size: 1.1rem; color: #222;">${escapeOutfitText(lastOutfit.name)}</strong>
+            <button class="aesthetic-edit-btn" onclick="enableOutfitNameEdit('${outfitId}')" title="Editar nombre" style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
             </button>
         </div>
         <span style="font-size: 0.85rem; color: #777;">${lastOutfit.items.length} prendas combinadas</span>
 
         <div style="display: flex; gap: 10px; width: 100%; margin-top: 14px;">
-            <button type="button" onclick="createPageAssignOutfit(${lastOutfit.id})" style="flex: 1; height: 46px; background: #2c2c2c; color: #fff; border: none; border-radius: 14px; font-size: 0.9rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            <button type="button" onclick="createPageAssignOutfit('${outfitId}')" style="flex: 1; height: 46px; background: #2c2c2c; color: #fff; border: none; border-radius: 14px; font-size: 0.9rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M3 10h18M8 2.5v4M16 2.5v4"/></svg>
                 Asignar outfit
             </button>
-            <button type="button" onclick="createPageDeleteOutfit(${lastOutfit.id})" aria-label="Eliminar outfit" title="Eliminar outfit" style="width: 46px; height: 46px; flex-shrink: 0; background: #1f1f1f; color: #fff; border: none; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+            <button type="button" onclick="createPageDeleteOutfit('${outfitId}')" aria-label="Eliminar outfit" title="Eliminar outfit" style="width: 46px; height: 46px; flex-shrink: 0; background: #1f1f1f; color: #fff; border: none; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>
             </button>
         </div>
@@ -369,29 +396,36 @@ function enableOutfitNameEdit(id) {
     if (inputField) inputField.focus();
 }
 
-function saveOutfitName(id) {
+async function saveOutfitName(id) {
     const inputField = document.getElementById(`edit-outfit-input-${id}`);
     if (!inputField) return;
     const newName = inputField.value.trim();
     if (!newName) return;
 
-    let savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-    const outfit = savedOutfits.find(o => String(o.id) === String(id));
-    
-    if (outfit) {
-        outfit.name = newName;
-        localStorage.setItem('kombina_outfits', JSON.stringify(savedOutfits));
+    try {
+        const response = await fetch(`/api/outfits/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+        });
+        if (!response.ok) throw new Error('Error al actualizar nombre');
+
+        const data = await response.json();
+        const outfit = savedOutfits.find(o => String(o._id || o.id) === String(id));
+        if (outfit) outfit.name = data.outfit.name;
+
         renderSavedOutfitsList();
         showInAppToast('Nombre actualizado con éxito');
+    } catch (err) {
+        console.error('Error:', err);
+        showInAppToast('No se pudo actualizar el nombre');
     }
 }
 
-// Te lleva al calendario para que elijas el día de este outfit
 function createPageAssignOutfit(id) {
     window.location.href = 'calendar.html?assign=' + encodeURIComponent(id);
 }
 
-// Ventana de confirmación dentro de la app (sustituye a confirm() del navegador)
 function createPageConfirm({ title, message, confirmText, onConfirm }) {
     const old = document.getElementById('kombinaConfirmOverlay');
     if (old) old.remove();
@@ -417,35 +451,30 @@ function createPageConfirm({ title, message, confirmText, onConfirm }) {
     document.body.appendChild(overlay);
 }
 
-// Elimina el outfit (y lo quita del calendario)
 function createPageDeleteOutfit(id) {
     createPageConfirm({
         title: 'Eliminar outfit',
         message: 'Se eliminará este outfit y también se quitará de tu calendario.',
         confirmText: 'Eliminar',
-        onConfirm: () => {
-            let savedOutfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-            savedOutfits = savedOutfits.filter(o => String(o.id) !== String(id));
-            localStorage.setItem('kombina_outfits', JSON.stringify(savedOutfits));
-
+        onConfirm: async () => {
             try {
-                const assignments = JSON.parse(localStorage.getItem('kombina_calendar_assignments')) || {};
-                Object.keys(assignments).forEach(key => {
-                    assignments[key] = (assignments[key] || []).filter(x => String(x) !== String(id));
-                    if (assignments[key].length === 0) delete assignments[key];
-                });
-                localStorage.setItem('kombina_calendar_assignments', JSON.stringify(assignments));
-            } catch (err) {
-                console.warn('No se pudo limpiar el calendario:', err);
-            }
+                const response = await fetch(`/api/outfits/${id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Error al eliminar');
 
-            renderSavedOutfitsList();
-            showInAppToast('Outfit eliminado');
+                savedOutfits = savedOutfits.filter(o => String(o._id || o.id) !== String(id));
+
+                // El servidor ya quita el outfit del calendario al borrarlo
+
+                renderSavedOutfitsList();
+                showInAppToast('Outfit eliminado');
+            } catch (err) {
+                console.error('Error:', err);
+                showInAppToast('No se pudo eliminar el outfit');
+            }
         }
     });
 }
 
-// --- LIENZO DE OUTFIT (compartido por create-outfit, perfil y colecciones) ---
 const OUTFIT_CANVAS_W = 397;
 const OUTFIT_CANVAS_H = 590;
 const OUTFIT_SLOTS = {
@@ -462,8 +491,6 @@ const OUTFIT_SLOTS = {
     zapatos:   { l: 35.7, t: 90.2, w: 33.0, h: 9.3,  z: 3 }
 };
 
-// Alineación vertical de cada prenda dentro de su caja: las de arriba se pegan abajo
-// y las de abajo se pegan arriba, así el top y el pantalón quedan juntos sin hueco.
 const OUTFIT_ALIGN = {
     gorro:    'flex-end',
     jersey:   'flex-end',
@@ -511,19 +538,7 @@ function buildOutfitCanvasHTML(items) {
 }
 
 function migrateSavedOutfits() {
-    try {
-        const outfits = JSON.parse(localStorage.getItem('kombina_outfits')) || [];
-        let changed = false;
-        outfits.forEach(o => {
-            if (o.compositeImageHTML && Array.isArray(o.items) && o.items.length) {
-                delete o.compositeImageHTML;
-                changed = true;
-            }
-        });
-        if (changed) localStorage.setItem('kombina_outfits', JSON.stringify(outfits));
-    } catch (err) {
-        console.warn('Migración de outfits omitida:', err);
-    }
+    // Ya no requerida con MongoDB
 }
 
 function updateCreateOutfitLayout() {
