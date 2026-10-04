@@ -1,28 +1,27 @@
-name: CI - Pruebas Backend
+name: Tests
 
-on:
-  push:
-    branches: [ "main", "feature/*" ]
-  pull_request:
-    branches: [ "main" ]
+on: [push, pull_request]
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
+    # Base de datos MongoDB temporal solo para los tests (no usa Atlas ni secretos)
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+
+    env:
+      NODE_ENV: test
+      MONGODB_URI: mongodb://localhost:27017/kombina_test
+
     steps:
-      - name: Copiar repositorio
-        uses: actions/checkout@v3
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-
-      - name: Instalar dependencias globales y locales
-        run: |
-          npm install
-          npm install -g jest
-
-      - name: Ejecutar pruebas unitarias
-        run: jest
+          node-version: 20
+      - run: npm ci
+      - name: Run jest
+        run: npx jest --forceExit

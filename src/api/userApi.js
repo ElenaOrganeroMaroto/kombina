@@ -1,60 +1,96 @@
-require('dotenv').config(); // <-- 1. ¡Siempre lo primero de todo!
+require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
-const mongoose = require('mongoose'); // 2. Importar mongoose para la base de datos
+const mongoose = require('mongoose');
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // las imágenes van en base64
 
-// 3. Servir la carpeta 'public' (subiendo dos niveles desde src/api hasta la raíz)
+// Servir la carpeta 'public'
 app.use(express.static(path.join(__dirname, '../../public')));
 
-/* Comentamos esto para que no intercepte la ruta raíz '/' y cargue el index.html
-app.get('/', (req, res) => {
-  res.json({ message: '¡API de Kombina funcionando correctamente!' });
-});
-*/
-
-// 4. Conexión a MongoDB Atlas usando la variable de entorno
+// Conexión a MongoDB Atlas
 const MONGODB_URI = process.env.MONGODB_URI;
 
 if (process.env.NODE_ENV !== 'test') {
-  mongoose.connect(MONGODB_URI)
+  mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000
+  })
     .then(() => console.log('🟢 Conectado exitosamente a MongoDB Atlas'))
     .catch((err) => console.error('🔴 Error conectando a MongoDB:', err));
 }
 
+
 const userLogic = require('../logic/userLogic');
 const { verifyAuth, verifyAdmin } = require('../middleware/authMiddleware');
 
-// Ruta de registro (asíncrona por bcrypt)
+// Importar rutas de prendas, outfits y colecciones
+const clothingApi = require('./clothingApi');
+const outfitApi = require('./outfitApi');
+const collectionApi = require('./collectionApi');
+const calendarApi = require('./calendarApi');
+
+const userData = require('../data/userData');
+const profileLogic = require('../logic/profileLogic');
+const accountLogic = require('../logic/accountLogic');
+const { statusOf } = require('../logic/errors');
+
+app.use(clothingApi);
+app.use(outfitApi);
+app.use(collectionApi);
+app.use(calendarApi);
+
+// Perfil del usuario (nombre, usuario, bio, avatar)
+app.get('/api/profile', async (req, res) => {
+  try {
+    res.json(await profileLogic.getProfile(req.query.userId));
+  } catch (error) {
+    res.status(statusOf(error, 500)).json({ error: error.message });
+  }
+});
+
+app.put('/api/profile', async (req, res) => {
+  try {
+    res.json(await profileLogic.updateProfile(req.body.userId, req.body));
+  } catch (error) {
+    res.status(statusOf(error, 400)).json({ error: error.message });
+  }
+});
+
+// Ruta de registro
 app.post('/api/register', async (req, res) => {
   try {
-    const newUser = await userLogic.registerUser(req.body);
-    res.status(201).json({ message: 'Usuario registrado con éxito', user: newUser });
+    // Solo se aceptan email y contraseña: el rol y el estado nunca los decide el navegador
+    const { email, password } = req.body;
+    const newUser = await userLogic.registerUser({ email, password });
+    res.status(201).json({ message: 'Usuario registrado con éxito', user: userLogic.toPublicUser(newUser) });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Ruta de login (asíncrona por bcrypt)
+// Ruta de login
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await userLogic.loginUser(email, password);
-    res.json(result);
+    res.json({ message: result.message, user: userLogic.toPublicUser(result.user) });
   } catch (error) {
     res.status(401).json({ error: error.message });
   }
 });
 
-// Ruta protegida: Eliminar cuenta (requiere autenticación)
-app.delete('/api/account', verifyAuth, (req, res) => {
+// Ruta protegida: Eliminar cuenta
+app.delete('/api/account', verifyAuth, async (req, res) => {
   try {
     const { email } = req.body;
-    const deleted = userLogic.removeAccount(email, req.user.role, req.user.email);
-    res.json({ message: 'Cuenta eliminada con éxito', deleted });
+    const target = await userData.findUserByEmail(email);
+    const deleted = await userLogic.removeAccount(email, req.user.role, req.user.email);
+
+    // Borrar también todos los datos del usuario en la base de datos
+    if (target) await accountLogic.removeUserData(target._id);
+    res.json({ message: 'Cuenta eliminada con éxito', deleted: userLogic.toPublicUser(deleted) });
   } catch (error) {
     res.status(403).json({ error: error.message });
   }

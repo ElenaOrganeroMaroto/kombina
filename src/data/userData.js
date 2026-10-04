@@ -1,27 +1,29 @@
-// Simulación de base de datos en memoria para usuarios
-let users = [];
+const User = require('../models/User');
 
-const getUsers = () => users;
-
-const addUser = (user) => {
-  users.push(user);
-  return user;
+const getUsers = async () => {
+  return await User.find();
 };
 
-const findUserByEmail = (email) => {
-  return users.find(u => u.email === email);
+const addUser = async (userDataObj) => {
+  const newUser = new User(userDataObj);
+  return await newUser.save();
 };
 
-const deleteUser = (email) => {
-  const index = users.findIndex(u => u.email === email);
-  if (index !== -1) {
-    return users.splice(index, 1)[0];
+// Los emails se guardan en minúsculas y sin espacios, así que se buscan igual
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const findUserByEmail = async (email) => {
+  return await User.findOne({ email: normalizeEmail(email) });
+};
+
+const deleteUser = async (email) => {
+  return await User.findOneAndDelete({ email: normalizeEmail(email) });
+};
+
+const clearUsers = async () => {
+  if (process.env.NODE_ENV === 'test') {
+    await User.deleteMany({});
   }
-  return null;
-};
-
-const clearUsers = () => {
-  users = [];
 };
 
 module.exports = { getUsers, addUser, findUserByEmail, deleteUser, clearUsers };
