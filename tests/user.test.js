@@ -5,10 +5,18 @@ const userData = require('../src/data/userData');
 // Conectar a la base de datos antes de ejecutar los tests
 beforeAll(async () => {
   const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kombina_test';
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGODB_URI);
+
+  // Seguridad: estos tests borran TODOS los usuarios (clearUsers), así que solo se ejecutan
+  // contra una base de datos cuyo nombre contenga "test" (nunca contra la base real de la app).
+  if (!/test/i.test(MONGODB_URI)) {
+    throw new Error('MONGODB_URI debe apuntar a una base de datos de pruebas (con "test" en el nombre).');
   }
-});
+
+  if (mongoose.connection.readyState === 0) {
+    // Falla pronto y con un mensaje claro si no hay base de datos disponible
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+  }
+}, 20000);
 
 // Limpiar la base de datos antes de cada test
 beforeEach(async () => {
@@ -19,7 +27,7 @@ beforeEach(async () => {
 
 // Cerrar la conexión de Mongoose al terminar todos los tests
 afterAll(async () => {
-  await mongoose.connection.close();
+  await mongoose.disconnect();
 });
 
 test('1. Registro exitoso de un nuevo usuario', async () => {
