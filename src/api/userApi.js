@@ -35,7 +35,9 @@ const userData = require('../data/userData');
 const profileLogic = require('../logic/profileLogic');
 const accountLogic = require('../logic/accountLogic');
 const { statusOf } = require('../logic/errors');
+const activityLogMiddleware = require('../middleware/activityLogMiddleware');
 
+app.use(activityLogMiddleware);
 app.use(clothingApi);
 app.use(outfitApi);
 app.use(collectionApi);
@@ -64,6 +66,8 @@ app.post('/api/register', async (req, res) => {
     // Solo se aceptan email y contraseña: el rol y el estado nunca los decide el navegador
     const { email, password } = req.body;
     const newUser = await userLogic.registerUser({ email, password });
+    req.activityActorId = newUser._id;
+    req.activityActorRole = newUser.role;
     res.status(201).json({ message: 'Usuario registrado con éxito', user: userLogic.toPublicUser(newUser) });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -75,6 +79,8 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await userLogic.loginUser(email, password);
+    req.activityActorId = result.user._id;
+    req.activityActorRole = result.user.role;
     res.json({
       message: result.message,
       user: userLogic.toPublicUser(result.user),
@@ -90,6 +96,7 @@ app.delete('/api/account', verifyAuth, async (req, res) => {
   try {
     const { email } = req.body;
     const target = await userData.findUserByEmail(email);
+    req.activityTargetId = target && target._id;
     const deleted = await userLogic.removeAccount(email, req.user.role, req.user.email);
 
     // Borrar también todos los datos del usuario en la base de datos
