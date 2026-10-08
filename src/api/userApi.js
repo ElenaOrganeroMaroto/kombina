@@ -36,6 +36,9 @@ const profileLogic = require('../logic/profileLogic');
 const accountLogic = require('../logic/accountLogic');
 const { statusOf } = require('../logic/errors');
 const activityLogMiddleware = require('../middleware/activityLogMiddleware');
+const { appendCookie, clearCookie, setSessionCookie, clearSessionCookie, readCookie } = require('../logic/sessionCookie');
+const { createOAuthState, verifyOAuthState } = require('../logic/oauthState');
+const { createGoogleAuthorizationUrl, verifyGoogleCode } = require('../services/googleOAuthService');
 
 app.use(activityLogMiddleware);
 app.use(clothingApi);
@@ -68,9 +71,31 @@ app.post('/api/register', async (req, res) => {
     const newUser = await userLogic.registerUser({ email, password });
     req.activityActorId = newUser._id;
     req.activityActorRole = newUser.role;
-    res.status(201).json({ message: 'Usuario registrado con éxito', user: userLogic.toPublicUser(newUser) });
+    res.status(201).json({
+      message: 'Registro completado. Revisa tu correo para confirmar la cuenta.',
+      user: userLogic.toPublicUser(newUser)
+    });
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(statusOf(error, 400)).json({ error: error.message });
+  }
+});
+
+app.get('/api/auth/confirm-email', async (req, res) => {
+  try {
+    const user = await userLogic.confirmEmail(req.query.token);
+    req.activityActorId = user._id;
+    req.activityActorRole = user.role;
+    res.redirect(303, '/login.html?confirmed=1');
+  } catch (error) {
+    res.status(statusOf(error, 400)).json({ error: error.message });
+  }
+});
+
+app.post('/api/resend-confirmation', async (req, res) => {
+  try {
+    res.json(await userLogic.resendConfirmation(req.body.email));
+  } catch (error) {
+    res.status(statusOf(error, 503)).json({ error: error.message });
   }
 });
 
@@ -81,13 +106,61 @@ app.post('/api/login', async (req, res) => {
     const result = await userLogic.loginUser(email, password);
     req.activityActorId = result.user._id;
     req.activityActorRole = result.user.role;
+    setSessionCookie(res, result.token);
     res.json({
       message: result.message,
-      user: userLogic.toPublicUser(result.user),
-      token: result.token
+      user: userLogic.toPublicUser(result.user)
     });
   } catch (error) {
     res.status(401).json({ error: error.message });
+  }
+});
+
+app.get('/api/auth/google', (req, res) => {
+  try {
+    const { state, cookieValue } = createOAuthState();
+    appendCookie(res, 'kombina_oauth_state', cookieValue, {
+      maxAge: 600,
+      path: '/api/auth/google/callback'
+    });
+    res.redirect(createGoogleAuthorizationUrl(state));
+  } catch (error) {
+    res.status(503).json({ error: error.message });
+  }
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const stateCookie = readCookie(req, 'kombina_oauth_state');
+  clearCookie(res, 'kombina_oauth_state', '/api/auth/google/callback');
+  if (!verifyOAuthState(stateCookie, req.query.state)) {
+    req.activityFailure = true;
+    return res.redirect(303, '/login.html?oauth=invalid');
+  }
+
+  try {
+    const googleProfile = await verifyGoogleCode(req.query.code);
+    const result = await userLogic.loginWithGoogle(googleProfile);
+    req.activityActorId = result.user._id;
+    req.activityActorRole = result.user.role;
+    setSessionCookie(res, result.token);
+    res.redirect(303, '/login.html?oauth=success');
+  } catch {
+    req.activityFailure = true;
+    res.redirect(303, '/login.html?oauth=failed');
+  }
+});
+
+app.get('/api/session', verifyAuth, (req, res) => {
+  res.json({ user: userLogic.toPublicUser(req.user) });
+});
+
+app.post('/api/logout', verifyAuth, async (req, res) => {
+  try {
+    await userData.incrementSessionVersion(req.user._id);
+    clearSessionCookie(res);
+    res.status(204).end();
+  } catch (error) {
+    res.status(500).json({ error: 'No se pudo cerrar la sesión en el servidor.' });
   }
 });
 
@@ -101,6 +174,7 @@ app.delete('/api/account', verifyAuth, async (req, res) => {
 
     // Borrar también todos los datos del usuario en la base de datos
     if (target) await accountLogic.removeUserData(target._id);
+    clearSessionCookie(res);
     res.json({ message: 'Cuenta eliminada con éxito', deleted: userLogic.toPublicUser(deleted) });
   } catch (error) {
     res.status(403).json({ error: error.message });

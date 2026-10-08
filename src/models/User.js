@@ -2,9 +2,14 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true },
+  password: { type: String, required: false },
   isActive: { type: Boolean, default: false },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  authProviders: { type: [String], enum: ['local', 'google'], default: ['local'] },
+  googleId: { type: String, unique: true, sparse: true },
+  emailConfirmationTokenHash: { type: String },
+  emailConfirmationExpiresAt: { type: Date },
+  sessionVersion: { type: Number, default: 0 },
   // Datos del perfil visibles en la app
   name: { type: String, default: '', trim: true },
   handle: { type: String, default: '', trim: true },
