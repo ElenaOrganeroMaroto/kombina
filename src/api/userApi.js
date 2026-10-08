@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const app = express();
 
 app.use(express.json({ limit: '10mb' })); // las imágenes van en base64
+app.use(express.urlencoded({ extended: false }));
 
 // Servir la carpeta 'public'
 app.use(express.static(path.join(__dirname, '../../public')));
@@ -80,14 +81,34 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.get('/api/auth/confirm-email', async (req, res) => {
+app.get('/api/auth/confirm-email', (req, res) => {
+  const token = req.query.token;
+  if (typeof token !== 'string' || !/^[a-f0-9]{64}$/i.test(token)) {
+    return res.status(400).send('El enlace de confirmación no es válido o ha caducado.');
+  }
+
+  res.type('html').send(`<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Confirmar cuenta · Kombina</title></head>
+<body style="font-family: sans-serif; max-width: 480px; margin: 12vh auto; padding: 24px; color: #222;">
+  <h1>Confirma tu cuenta de Kombina</h1>
+  <p>Para activar tu cuenta, pulsa el botón. Este enlace solo se utilizará al confirmar.</p>
+  <form method="post" action="/api/auth/confirm-email">
+    <input type="hidden" name="token" value="${token}">
+    <button type="submit" style="padding: 12px 20px; background: #222; color: white; border: 0; cursor: pointer;">Confirmar cuenta</button>
+  </form>
+</body>
+</html>`);
+});
+
+app.post('/api/auth/confirm-email', async (req, res) => {
   try {
-    const user = await userLogic.confirmEmail(req.query.token);
+    const user = await userLogic.confirmEmail(req.body.token);
     req.activityActorId = user._id;
     req.activityActorRole = user.role;
     res.redirect(303, '/login.html?confirmed=1');
   } catch (error) {
-    res.status(statusOf(error, 400)).json({ error: error.message });
+    res.status(statusOf(error, 400)).send(error.message);
   }
 });
 

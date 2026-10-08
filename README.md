@@ -45,6 +45,6 @@ Configura estas variables en el entorno del servidor; no subas `.env` ni claves 
 
 En Google Cloud Console, añade como URI de redirección autorizada `${PUBLIC_URL}/api/auth/google/callback`. Registra por separado `http://localhost:3000/api/auth/google/callback` para desarrollo y `https://kombina.onrender.com/api/auth/google/callback` para Render. El inicio OAuth valida `state`, intercambia el código en el servidor y acepta únicamente perfiles con email verificado.
 
-El registro local envía un enlace de confirmación válido durante 24 horas. El token se almacena hasheado y solo puede utilizarse una vez; la cuenta no inicia sesión hasta confirmar. Resend requiere que `EMAIL_FROM` pertenezca a un dominio verificado.
+El registro local envía un enlace de confirmación válido durante 24 horas. El token se almacena hasheado y solo puede utilizarse una vez; la cuenta no inicia sesión hasta confirmar. El enlace muestra una página intermedia: un `GET` automático de Outlook u otro escáner no activa ni consume el token; la confirmación se realiza al pulsar el botón, que envía un `POST`. Resend requiere que `EMAIL_FROM` pertenezca a un dominio verificado.
 
 Las sesiones se mantienen en una cookie `HttpOnly` durante siete días. El endpoint de logout incrementa la versión de sesión en MongoDB y revoca también los tokens anteriores. Las pruebas automatizadas se ejecutan con `npm test` y requieren una base de datos cuyo nombre contenga `test`, por ejemplo `mongodb://127.0.0.1:27017/kombina_test`.
