@@ -516,6 +516,7 @@ function handleLogout() {
         onConfirm: () => {
             localStorage.removeItem('kombina_user');
             localStorage.removeItem('kombina_user_id');
+            localStorage.removeItem('kombina_session_token');
             ['kombina_calendar_assignments','kombina_temp_outfit','kombina_collections','kombina_outfits','kombina_wardrobe',
              'kombina_user_name','kombina_user_handle','kombina_user_bio','kombina_user_avatar']
                 .forEach(k => localStorage.removeItem(k));
@@ -540,7 +541,7 @@ function handleDeleteAccount() {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-user-email': currentUser
+                        'Authorization': `Bearer ${localStorage.getItem('kombina_session_token') || ''}`
                     },
                     body: JSON.stringify({ email: currentUser })
                 });

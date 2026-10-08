@@ -75,7 +75,11 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await userLogic.loginUser(email, password);
-    res.json({ message: result.message, user: userLogic.toPublicUser(result.user) });
+    res.json({
+      message: result.message,
+      user: userLogic.toPublicUser(result.user),
+      token: result.token
+    });
   } catch (error) {
     res.status(401).json({ error: error.message });
   }
@@ -96,7 +100,22 @@ app.delete('/api/account', verifyAuth, async (req, res) => {
   }
 });
 
-// Ruta protegida de administrador
+app.get('/api/admin/users', verifyAdmin, async (req, res) => {
+  try {
+    res.json(await userLogic.listUsers());
+  } catch (error) {
+    res.status(statusOf(error, 500)).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/users/:userId/status', verifyAdmin, async (req, res) => {
+  try {
+    res.json(await userLogic.getUserStatus(req.params.userId));
+  } catch (error) {
+    res.status(statusOf(error, 500)).json({ error: error.message });
+  }
+});
+
 app.get('/api/admin/check', verifyAdmin, (req, res) => {
   res.json({ message: 'Acceso de administrador autorizado correctamente.' });
 });
