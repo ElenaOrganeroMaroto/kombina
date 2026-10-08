@@ -513,7 +513,15 @@ function handleLogout() {
         title: 'Cerrar sesión',
         message: '¿Estás seguro de que deseas cerrar sesión?',
         confirmText: 'Cerrar sesión',
-        onConfirm: () => {
+        onConfirm: async () => {
+            try {
+                const response = await fetch('/api/logout', { method: 'POST' });
+                if (!response.ok) throw new Error('No se pudo cerrar la sesión en el servidor.');
+            } catch (error) {
+                profileNotify(error.message);
+                return;
+            }
+
             localStorage.removeItem('kombina_user');
             localStorage.removeItem('kombina_user_id');
             localStorage.removeItem('kombina_session_token');
@@ -539,10 +547,7 @@ function handleDeleteAccount() {
                 // Llamada directa (no depende de que apiService.js esté cargado en esta página)
                 const response = await fetch('/api/account', {
                     method: 'DELETE',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('kombina_session_token') || ''}`
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email: currentUser })
                 });
                 const result = await response.json().catch(() => ({}));

@@ -1,20 +1,22 @@
 const userData = require('../data/userData');
 const userLogic = require('../logic/userLogic');
 const { verifySessionToken } = require('../logic/sessionToken');
+const { SESSION_COOKIE_NAME, readCookie } = require('../logic/sessionCookie');
 
 // Middleware para verificar que el usuario ha iniciado sesión (sesión válida)
 const verifyAuth = async (req, res, next) => {
   try {
     const authorization = req.headers.authorization || '';
     const [scheme, token] = authorization.split(' ');
-    const session = scheme === 'Bearer' ? verifySessionToken(token) : null;
+    const sessionToken = scheme === 'Bearer' ? token : readCookie(req, SESSION_COOKIE_NAME);
+    const session = verifySessionToken(sessionToken);
 
     if (!session) {
       return res.status(401).json({ error: 'Acceso denegado: se requiere una sesión válida.' });
     }
 
     const user = await userData.findUserById(session.userId);
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || (user.sessionVersion || 0) !== session.sessionVersion) {
       return res.status(401).json({ error: 'Sesión no válida o usuario inactivo.' });
     }
 

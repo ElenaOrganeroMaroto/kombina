@@ -18,3 +18,33 @@ Solo un token de un usuario con rol `admin` puede consultar `GET /api/admin/user
 ## Registro de actividad
 
 El servidor emite una línea JSON por cada operación que modifica datos de la API y por cada consulta administrativa. Cada evento contiene fecha, acción, resultado HTTP y, cuando está autenticado, el identificador y rol del actor. No se registran cuerpos de petición, emails, contraseñas, tokens ni parámetros de consulta. Los eventos se escriben en `stdout`, para que puedan ser recogidos por el entorno donde se ejecute el servidor.
+
+## OAuth y confirmación de correo
+
+Configura estas variables en el entorno del servidor; no subas `.env` ni claves al repositorio. La plantilla está en `.env.example`:
+
+- `PUBLIC_URL`: `http://localhost:3000` en desarrollo y `https://kombina.onrender.com` en Render.
+- `SESSION_SECRET`: secreto aleatorio largo y estable entre despliegues; firma sesiones y el estado OAuth.
+- `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`: credenciales de un cliente OAuth de tipo aplicación web.
+- `RESEND_API_KEY` y `EMAIL_FROM`: clave de Resend y dirección remitente de un dominio verificado en Resend.
+
+En Google Cloud Console, añade como URI de redirección autorizada `https://kombina.onrender.com/api/auth/google/callback`. Para pruebas locales, registra también `http://localhost:3000/api/auth/google/callback`. El flujo valida `state`, intercambia el código en el servidor y solo acepta perfiles con email verificado.
+
+El registro local envía un enlace de confirmación válido durante 24 horas. El token se almacena hasheado y solo puede utilizarse una vez; la cuenta no inicia sesión hasta confirmarse. Resend requiere que `EMAIL_FROM` pertenezca a un dominio verificado.
+
+Las sesiones se mantienen en una cookie `HttpOnly` durante siete días. El endpoint de logout incrementa la versión de sesión en MongoDB y revoca también tokens anteriores. Las pruebas se ejecutan con `npm test` y requieren una base de datos cuyo nombre contenga `test`, por ejemplo `mongodb://127.0.0.1:27017/kombina_test`.
+
+## OAuth y confirmación de correo
+
+Configura estas variables en el entorno del servidor; no subas `.env` ni claves al repositorio:
+
+- `PUBLIC_URL`: `http://localhost:3000` en desarrollo y `https://kombina.onrender.com` en Render.
+- `SESSION_SECRET`: secreto aleatorio largo y estable entre despliegues; firma sesiones y el estado OAuth.
+- `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`: credenciales de un cliente OAuth de tipo aplicación web.
+- `RESEND_API_KEY` y `EMAIL_FROM`: clave de Resend y dirección remitente de un dominio verificado en Resend.
+
+En Google Cloud Console, añade como URI de redirección autorizada `${PUBLIC_URL}/api/auth/google/callback`. Registra por separado `http://localhost:3000/api/auth/google/callback` para desarrollo y `https://kombina.onrender.com/api/auth/google/callback` para Render. El inicio OAuth valida `state`, intercambia el código en el servidor y acepta únicamente perfiles con email verificado.
+
+El registro local envía un enlace de confirmación válido durante 24 horas. El token se almacena hasheado y solo puede utilizarse una vez; la cuenta no inicia sesión hasta confirmar. Resend requiere que `EMAIL_FROM` pertenezca a un dominio verificado.
+
+Las sesiones se mantienen en una cookie `HttpOnly` durante siete días. El endpoint de logout incrementa la versión de sesión en MongoDB y revoca también los tokens anteriores. Las pruebas automatizadas se ejecutan con `npm test` y requieren una base de datos cuyo nombre contenga `test`, por ejemplo `mongodb://127.0.0.1:27017/kombina_test`.
