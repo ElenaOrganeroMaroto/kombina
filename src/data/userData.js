@@ -20,6 +20,33 @@ const findUserById = async (userId) => {
   return await User.findById(userId);
 };
 
+const findUserByGoogleId = async (googleId) => {
+  return await User.findOne({ googleId });
+};
+
+const activateUserByEmailToken = async (tokenHash) => {
+  return await User.findOneAndUpdate(
+    {
+      emailConfirmationTokenHash: tokenHash,
+      emailConfirmationExpiresAt: { $gt: new Date() },
+      isActive: false
+    },
+    {
+      $set: { isActive: true },
+      $unset: { emailConfirmationTokenHash: 1, emailConfirmationExpiresAt: 1 }
+    },
+    { returnDocument: 'after' }
+  );
+};
+
+const incrementSessionVersion = async (userId) => {
+  return await User.findByIdAndUpdate(
+    userId,
+    { $inc: { sessionVersion: 1 } },
+    { returnDocument: 'after' }
+  );
+};
+
 const deleteUser = async (email) => {
   return await User.findOneAndDelete({ email: normalizeEmail(email) });
 };
@@ -30,4 +57,14 @@ const clearUsers = async () => {
   }
 };
 
-module.exports = { getUsers, addUser, findUserByEmail, findUserById, deleteUser, clearUsers };
+module.exports = {
+  getUsers,
+  addUser,
+  findUserByEmail,
+  findUserById,
+  findUserByGoogleId,
+  activateUserByEmailToken,
+  incrementSessionVersion,
+  deleteUser,
+  clearUsers
+};

@@ -2,7 +2,9 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const isRelevantRequest = (method, path) => {
   if (!path.startsWith('/api/')) return false;
-  return MUTATING_METHODS.has(method) || (method === 'GET' && path.startsWith('/api/admin/'));
+  return MUTATING_METHODS.has(method) || (method === 'GET' && (
+    path.startsWith('/api/admin/') || path.startsWith('/api/auth/')
+  ));
 };
 
 const activityLogMiddleware = (req, res, next) => {
@@ -17,7 +19,7 @@ const activityLogMiddleware = (req, res, next) => {
       timestamp: new Date().toISOString(),
       event: 'activity',
       action: `${req.method} ${path}`,
-      outcome: res.statusCode < 400 ? 'success' : 'failure',
+      outcome: res.statusCode < 400 && !req.activityFailure ? 'success' : 'failure',
       statusCode: res.statusCode
     };
 
