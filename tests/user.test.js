@@ -1,9 +1,18 @@
 const mongoose = require('mongoose');
 const request = require('supertest');
+jest.mock('../src/services/emailService', () => ({
+  sendConfirmationEmail: jest.fn().mockResolvedValue(undefined)
+}));
+jest.mock('../src/services/googleOAuthService', () => ({
+  createGoogleAuthorizationUrl: jest.fn((state) => `https://accounts.google.com/o/oauth2/v2/auth?state=${state}`),
+  verifyGoogleCode: jest.fn()
+}));
 const userLogic = require('../src/logic/userLogic');
 const userData = require('../src/data/userData');
 const User = require('../src/models/User');
 const app = require('../src/api/userApi');
+const { sendConfirmationEmail } = require('../src/services/emailService');
+const googleOAuthService = require('../src/services/googleOAuthService');
 
 // Conectar a la base de datos antes de ejecutar los tests
 beforeAll(async () => {
@@ -28,6 +37,8 @@ beforeAll(async () => {
 
 // Limpiar la base de datos antes de cada test
 beforeEach(async () => {
+  sendConfirmationEmail.mockClear();
+  googleOAuthService.verifyGoogleCode.mockReset();
   if (typeof userData.clearUsers === 'function') {
     await userData.clearUsers();
   }
@@ -193,9 +204,12 @@ test('registra actividad con resultado y actor sin guardar credenciales', async 
     const login = await request(app)
       .post('/api/login')
       .send({ email, password });
+    const sessionCookie = login.headers['set-cookie']
+      .find((cookie) => cookie.startsWith('kombina_session='))
+      .split(';')[0];
     await request(app)
       .delete('/api/account')
-      .set('Authorization', `Bearer ${login.body.token}`)
+      .set('Cookie', sessionCookie)
       .send({ email });
 
     const records = logSpy.mock.calls.map(([record]) => JSON.parse(record));
@@ -226,4 +240,118 @@ test('registra actividad con resultado y actor sin guardar credenciales', async 
   } finally {
     logSpy.mockRestore();
   }
+});
+
+test('confirma el correo mediante el enlace HTTP y redirige al login', async () => {
+  await userLogic.registerUser({ email: 'http-confirm@uclm.es', password: '123' });
+  const token = sendConfirmationEmail.mock.calls[0][1];
+
+  const response = await request(app)
+    .get('/api/auth/confirm-email')
+    .query({ token });
+
+  expect(response.status).toBe(303);
+  expect(response.headers.location).toBe('/login.html?confirmed=1');
+  await expect(userLogic.loginUser('http-confirm@uclm.es', '123')).resolves.toMatchObject({
+    user: { isActive: true }
+  });
+});
+
+test('el callback OAuth valida state y crea una sesión Google persistente', async () => {
+  googleOAuthService.verifyGoogleCode.mockResolvedValue({
+    sub: 'google-user-123',
+    email: 'google@uclm.es',
+    email_verified: true,
+    name: 'Google User'
+  });
+
+  const start = await request(app).get('/api/auth/google');
+  expect(start.status).toBe(302);
+  const authorizationUrl = new URL(start.headers.location);
+  const state = authorizationUrl.searchParams.get('state');
+  const stateCookie = start.headers['set-cookie']
+    .find((cookie) => cookie.startsWith('kombina_oauth_state='))
+    .split(';')[0];
+
+  const callback = await request(app)
+    .get('/api/auth/google/callback')
+    .query({ code: 'authorization-code', state })
+    .set('Cookie', stateCookie);
+
+  expect(callback.status).toBe(303);
+  expect(callback.headers.location).toBe('/login.html?oauth=success');
+  expect(googleOAuthService.verifyGoogleCode).toHaveBeenCalledWith('authorization-code');
+
+  const sessionCookie = callback.headers['set-cookie']
+    .find((cookie) => cookie.startsWith('kombina_session='))
+    .split(';')[0];
+  const session = await request(app)
+    .get('/api/session')
+    .set('Cookie', sessionCookie);
+
+  expect(session.status).toBe(200);
+  expect(session.body.user).toMatchObject({ email: 'google@uclm.es', role: 'user', isActive: true });
+});
+
+test('el callback OAuth rechaza state inválido y registra el fallo', async () => {
+  const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  try {
+    const response = await request(app)
+      .get('/api/auth/google/callback')
+      .query({ code: 'authorization-code', state: 'forged-state' });
+
+    expect(response.status).toBe(303);
+    expect(response.headers.location).toBe('/login.html?oauth=invalid');
+    expect(googleOAuthService.verifyGoogleCode).not.toHaveBeenCalled();
+    expect(JSON.parse(logSpy.mock.calls[0][0])).toMatchObject({
+      action: 'GET /api/auth/google/callback',
+      outcome: 'failure',
+      statusCode: 303
+    });
+  } finally {
+    logSpy.mockRestore();
+  }
+});
+
+test('logout invalida en el servidor una sesión incluso si se conserva el token', async () => {
+  await createActiveUser('logout@uclm.es');
+  const login = await request(app)
+    .post('/api/login')
+    .send({ email: 'logout@uclm.es', password: 'password123' });
+  expect(login.body).not.toHaveProperty('token');
+  const sessionCookie = login.headers['set-cookie']
+    .find((cookie) => cookie.startsWith('kombina_session='))
+    .split(';')[0];
+  expect(login.headers['set-cookie'].find((cookie) => cookie.startsWith('kombina_session=')))
+    .toMatch(/HttpOnly/i);
+
+  const beforeLogout = await request(app)
+    .get('/api/session')
+    .set('Cookie', sessionCookie);
+  expect(beforeLogout.status).toBe(200);
+
+  const logout = await request(app)
+    .post('/api/logout')
+    .set('Cookie', sessionCookie);
+  expect(logout.status).toBe(204);
+
+  const afterLogout = await request(app)
+    .get('/api/session')
+    .set('Cookie', sessionCookie);
+  expect(afterLogout.status).toBe(401);
+});
+
+test('confirma una cuenta con un token válido de un solo uso', async () => {
+  const user = await userLogic.registerUser({ email: 'confirm@uclm.es', password: '123' });
+  const confirmationToken = sendConfirmationEmail.mock.calls[0][1];
+
+  expect(user.isActive).toBe(false);
+  const confirmedUser = await userLogic.confirmEmail(confirmationToken);
+
+  expect(confirmedUser.isActive).toBe(true);
+  await expect(userLogic.confirmEmail(confirmationToken))
+    .rejects.toThrow('El enlace de confirmación no es válido o ha caducado.');
+  await expect(userLogic.loginUser('confirm@uclm.es', '123')).resolves.toMatchObject({
+    user: { isActive: true }
+  });
 });
