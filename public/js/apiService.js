@@ -28,7 +28,7 @@ const apiService = {
             method: 'DELETE',
             headers: { 
                 'Content-Type': 'application/json',
-                'x-user-email': email
+                'Authorization': `Bearer ${localStorage.getItem('kombina_session_token') || ''}`
             },
             body: JSON.stringify({ email })
         });
