@@ -14,3 +14,7 @@ db.users.updateOne(
 ```
 
 Solo un token de un usuario con rol `admin` puede consultar `GET /api/admin/users`, consultar `GET /api/admin/users/:userId/status` o usar las rutas administrativas. El listado devuelve email, rol y estado, nunca la contraseña. La eliminación de cuenta permite al administrador borrar cualquier cuenta y a un usuario normal solo la suya; las cuentas eliminadas se borran de la base de datos y no pueden volver a iniciar sesión.
+
+## Registro de actividad
+
+El servidor emite una línea JSON por cada operación que modifica datos de la API y por cada consulta administrativa. Cada evento contiene fecha, acción, resultado HTTP y, cuando está autenticado, el identificador y rol del actor. No se registran cuerpos de petición, emails, contraseñas, tokens ni parámetros de consulta. Los eventos se escriben en `stdout`, para que puedan ser recogidos por el entorno donde se ejecute el servidor.

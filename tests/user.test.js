@@ -171,3 +171,59 @@ test('un administrador puede eliminar a otro usuario', async () => {
   await expect(userLogic.loginUser('target@uclm.es', 'password123'))
     .rejects.toThrow('Usuario no encontrado.');
 });
+
+test('registra actividad con resultado y actor sin guardar credenciales', async () => {
+  const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  const email = 'audit@uclm.es';
+  const password = 'Secret-password-123';
+
+  try {
+    const registration = await request(app)
+      .post('/api/register')
+      .send({ email, password });
+    expect(registration.status).toBe(201);
+
+    await request(app)
+      .post('/api/login')
+      .send({ email, password });
+
+    const user = await User.findOne({ email });
+    user.isActive = true;
+    await user.save();
+    const login = await request(app)
+      .post('/api/login')
+      .send({ email, password });
+    await request(app)
+      .delete('/api/account')
+      .set('Authorization', `Bearer ${login.body.token}`)
+      .send({ email });
+
+    const records = logSpy.mock.calls.map(([record]) => JSON.parse(record));
+    const registrationLog = records.find((record) => record.action === 'POST /api/register');
+    const loginLog = records.find((record) => record.action === 'POST /api/login');
+    const deletionLog = records.find((record) => record.action === 'DELETE /api/account');
+
+    expect(registrationLog).toMatchObject({
+      event: 'activity',
+      outcome: 'success',
+      statusCode: 201,
+      actorRole: 'user'
+    });
+    expect(registrationLog.actorId).toBeDefined();
+    expect(loginLog).toMatchObject({
+      event: 'activity',
+      outcome: 'failure',
+      statusCode: 401
+    });
+    expect(deletionLog).toMatchObject({
+      outcome: 'success',
+      statusCode: 200,
+      actorRole: 'user',
+      targetId: registration.body.user._id
+    });
+    expect(JSON.stringify(records)).not.toContain(password);
+    expect(JSON.stringify(records)).not.toContain(email);
+  } finally {
+    logSpy.mockRestore();
+  }
+});
