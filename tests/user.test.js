@@ -242,13 +242,22 @@ test('registra actividad con resultado y actor sin guardar credenciales', async 
   }
 });
 
-test('confirma el correo mediante el enlace HTTP y redirige al login', async () => {
+test('un GET del enlace no consume el token; el POST confirma el correo y redirige al login', async () => {
   await userLogic.registerUser({ email: 'http-confirm@uclm.es', password: '123' });
   const token = sendConfirmationEmail.mock.calls[0][1];
 
-  const response = await request(app)
+  const linkPreview = await request(app)
     .get('/api/auth/confirm-email')
     .query({ token });
+  expect(linkPreview.status).toBe(200);
+  expect(linkPreview.text).toContain('Confirmar cuenta');
+  await expect(userLogic.loginUser('http-confirm@uclm.es', '123'))
+    .rejects.toThrow('La cuenta está pendiente de confirmación por correo.');
+
+  const response = await request(app)
+    .post('/api/auth/confirm-email')
+    .type('form')
+    .send({ token });
 
   expect(response.status).toBe(303);
   expect(response.headers.location).toBe('/login.html?confirmed=1');
