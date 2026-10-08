@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
+const request = require('supertest');
 const userLogic = require('../src/logic/userLogic');
 const userData = require('../src/data/userData');
+const User = require('../src/models/User');
+const app = require('../src/api/userApi');
 
 // Conectar a la base de datos antes de ejecutar los tests
 beforeAll(async () => {
@@ -68,4 +71,103 @@ test('5. Eliminación correcta de cuenta propia', async () => {
   
   const users = await userData.getUsers();
   expect(users.length).toBe(0);
+});
+
+const createActiveUser = async (email, role = 'user') => {
+  const user = await userLogic.registerUser({ email, password: 'password123' });
+  user.isActive = true;
+  user.role = role;
+  await user.save();
+  return user;
+};
+
+test('el registro ignora intentos de asignarse rol admin o estado activo', async () => {
+  const user = await userLogic.registerUser({
+    email: 'normal@uclm.es',
+    password: '123',
+    role: 'admin',
+    isActive: true
+  });
+
+  expect(user.role).toBe('user');
+  expect(user.isActive).toBe(false);
+});
+
+test('solo un administrador puede listar usuarios y la respuesta no incluye contraseñas', async () => {
+  const admin = await createActiveUser('admin@uclm.es', 'admin');
+  await createActiveUser('user@uclm.es');
+  const regularLogin = await userLogic.loginUser('user@uclm.es', 'password123');
+  const adminLogin = await userLogic.loginUser('admin@uclm.es', 'password123');
+
+  const spoofedRequest = await request(app)
+    .get('/api/admin/users')
+    .set('x-user-email', admin.email);
+  expect(spoofedRequest.status).toBe(401);
+
+  const deniedRequest = await request(app)
+    .get('/api/admin/users')
+    .set('Authorization', `Bearer ${regularLogin.token}`);
+  expect(deniedRequest.status).toBe(403);
+
+  const response = await request(app)
+    .get('/api/admin/users')
+    .set('Authorization', `Bearer ${adminLogin.token}`);
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual(expect.arrayContaining([
+    expect.objectContaining({ email: 'user@uclm.es', role: 'user', isActive: true })
+  ]));
+  expect(response.body[0]).not.toHaveProperty('password');
+});
+
+test('solo un administrador puede consultar el estado activo', async () => {
+  const admin = await createActiveUser('admin@uclm.es', 'admin');
+  const target = await createActiveUser('target@uclm.es');
+  const regularLogin = await userLogic.loginUser('target@uclm.es', 'password123');
+  const adminLogin = await userLogic.loginUser('admin@uclm.es', 'password123');
+
+  const deniedRequest = await request(app)
+    .get(`/api/admin/users/${target._id}/status`)
+    .set('Authorization', `Bearer ${regularLogin.token}`);
+  expect(deniedRequest.status).toBe(403);
+
+  const response = await request(app)
+    .get(`/api/admin/users/${target._id}/status`)
+    .set('Authorization', `Bearer ${adminLogin.token}`);
+  expect(response.status).toBe(200);
+  expect(response.body.isActive).toBe(true);
+});
+
+test('un usuario no puede borrar a otro, pero sí su cuenta y luego no puede iniciar sesión', async () => {
+  const owner = await createActiveUser('owner@uclm.es');
+  await createActiveUser('other@uclm.es');
+  const ownerLogin = await userLogic.loginUser('owner@uclm.es', 'password123');
+
+  const deniedRequest = await request(app)
+    .delete('/api/account')
+    .set('Authorization', `Bearer ${ownerLogin.token}`)
+    .send({ email: 'other@uclm.es' });
+  expect(deniedRequest.status).toBe(403);
+
+  const ownDelete = await request(app)
+    .delete('/api/account')
+    .set('Authorization', `Bearer ${ownerLogin.token}`)
+    .send({ email: owner.email });
+  expect(ownDelete.status).toBe(200);
+  await expect(userLogic.loginUser('owner@uclm.es', 'password123'))
+    .rejects.toThrow('Usuario no encontrado.');
+});
+
+test('un administrador puede eliminar a otro usuario', async () => {
+  await createActiveUser('admin@uclm.es', 'admin');
+  await createActiveUser('target@uclm.es');
+  const adminLogin = await userLogic.loginUser('admin@uclm.es', 'password123');
+
+  const response = await request(app)
+    .delete('/api/account')
+    .set('Authorization', `Bearer ${adminLogin.token}`)
+    .send({ email: 'target@uclm.es' });
+
+  expect(response.status).toBe(200);
+  await expect(userLogic.loginUser('target@uclm.es', 'password123'))
+    .rejects.toThrow('Usuario no encontrado.');
 });

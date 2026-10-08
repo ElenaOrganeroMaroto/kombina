@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const userData = require('../data/userData');
+const { createSessionToken } = require('./sessionToken');
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -23,10 +24,10 @@ const registerUser = async (userDataObj) => {
   const hashedPassword = await bcrypt.hash(userDataObj.password, 10);
 
   const newUserObj = {
-    ...userDataObj,
+    email: normalizeEmail(userDataObj.email),
     password: hashedPassword,
-    isActive: userDataObj.isActive ?? false, // ¡Recuerda poner true si quieres probarlo sin correo!
-    role: userDataObj.role || 'user'
+    isActive: false,
+    role: 'user'
   };
   return await userData.addUser(newUserObj);
 };
@@ -46,7 +47,17 @@ const loginUser = async (email, password) => {
     throw new Error('Contraseña incorrecta.');
   }
 
-  return { message: 'Login exitoso', user };
+  return { message: 'Login exitoso', user, token: createSessionToken(user._id) };
+};
+
+const listUsers = async () => {
+  const users = await userData.getUsers();
+  return users.map(toPublicUser);
+};
+
+const getUserStatus = async (userId) => {
+  const user = await userData.findUserById(userId);
+  return { userId, isActive: Boolean(user && user.isActive) };
 };
 
 const adminActionCheck = (userRole) => {
@@ -67,4 +78,12 @@ const removeAccount = async (email, requesterRole, requesterEmail) => {
   return deleted;
 };
 
-module.exports = { registerUser, loginUser, adminActionCheck, removeAccount, toPublicUser };
+module.exports = {
+  registerUser,
+  loginUser,
+  listUsers,
+  getUserStatus,
+  adminActionCheck,
+  removeAccount,
+  toPublicUser
+};

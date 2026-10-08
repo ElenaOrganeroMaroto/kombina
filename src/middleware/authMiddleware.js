@@ -1,18 +1,19 @@
 const userData = require('../data/userData');
 const userLogic = require('../logic/userLogic');
+const { verifySessionToken } = require('../logic/sessionToken');
 
 // Middleware para verificar que el usuario ha iniciado sesión (sesión válida)
 const verifyAuth = async (req, res, next) => {
   try {
-    // Por ejemplo, podemos recibir el email del usuario en las cabeceras (headers) o en la sesión
-    const userEmail = req.headers['x-user-email'] || (req.body && req.body.email);
+    const authorization = req.headers.authorization || '';
+    const [scheme, token] = authorization.split(' ');
+    const session = scheme === 'Bearer' ? verifySessionToken(token) : null;
 
-    if (!userEmail) {
+    if (!session) {
       return res.status(401).json({ error: 'Acceso denegado: se requiere una sesión válida.' });
     }
 
-    // findUserByEmail es asíncrona: hay que esperar el resultado con await
-    const user = await userData.findUserByEmail(userEmail);
+    const user = await userData.findUserById(session.userId);
     if (!user || !user.isActive) {
       return res.status(401).json({ error: 'Sesión no válida o usuario inactivo.' });
     }

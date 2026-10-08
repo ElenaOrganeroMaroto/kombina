@@ -1,7 +1,7 @@
 const User = require('../models/User');
 
 const getUsers = async () => {
-  return await User.find();
+  return await User.find().select('email role isActive');
 };
 
 const addUser = async (userDataObj) => {
@@ -16,6 +16,10 @@ const findUserByEmail = async (email) => {
   return await User.findOne({ email: normalizeEmail(email) });
 };
 
+const findUserById = async (userId) => {
+  return await User.findById(userId);
+};
+
 const deleteUser = async (email) => {
   return await User.findOneAndDelete({ email: normalizeEmail(email) });
 };
@@ -26,4 +30,4 @@ const clearUsers = async () => {
   }
 };
 
-module.exports = { getUsers, addUser, findUserByEmail, deleteUser, clearUsers };
+module.exports = { getUsers, addUser, findUserByEmail, findUserById, deleteUser, clearUsers };

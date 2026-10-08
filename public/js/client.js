@@ -34,6 +34,7 @@ async function loginUser() {
         
         // Guardamos la sesión en el cliente
         localStorage.setItem('kombina_user', (data.user && data.user.email) || email.trim().toLowerCase());
+        localStorage.setItem('kombina_session_token', data.token);
         
         // Guardamos el ID único de MongoDB Atlas para cargar el armario del usuario
         if (data.user && data.user._id) {
@@ -56,6 +57,7 @@ function logout() {
     // Borramos la sesión almacenada en el navegador
     localStorage.removeItem('kombina_user');
     localStorage.removeItem('kombina_user_id'); // Limpiamos también el ID del armario
+    localStorage.removeItem('kombina_session_token');
     
     // Redirigimos de vuelta a la pantalla de inicio / login
     window.location.href = 'index.html';
