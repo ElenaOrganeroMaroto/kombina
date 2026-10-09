@@ -9,21 +9,24 @@ const sendConfirmationEmail = async (email, token) => {
   const confirmationUrl = new URL('/api/auth/confirm-email', PUBLIC_URL);
   confirmationUrl.searchParams.set('token', token);
 
-  const response = await fetch('https://api.brevo.com/emails', {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${BREVO_API_KEY}`,
-      'Content-Type': 'application/json'
+      'api-key': BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      accept: 'application/json'
     },
     body: JSON.stringify({
-      from: EMAIL_FROM,
-      to: [email],
+      sender: { name: 'Kombina', email: EMAIL_FROM },
+      to: [{ email }],
       subject: 'Confirma tu cuenta de Kombina',
-      html: `<p>Confirma tu cuenta de Kombina:</p><p><a href="${confirmationUrl.href}">Confirmar cuenta</a></p><p>El enlace caduca en 24 horas.</p>`
+      htmlContent: `<p>Confirma tu cuenta de Kombina:</p><p><a href="${confirmationUrl.href}">Confirmar cuenta</a></p><p>El enlace caduca en 24 horas.</p>`
     })
   });
 
   if (!response.ok) {
+    // Solo al log del servidor: ayuda a depurar sin exponer detalles al usuario
+    console.error('Brevo error', response.status, await response.text());
     throw new AppError('No se pudo enviar el correo de confirmación.', 503);
   }
 };
