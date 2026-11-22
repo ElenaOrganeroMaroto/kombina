@@ -1,5 +1,6 @@
 # Dependencias
 node_modules/
+desktop.ini
 
 # Variables de entorno secretas
 .env
