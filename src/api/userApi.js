@@ -40,12 +40,23 @@ const activityLogMiddleware = require('../middleware/activityLogMiddleware');
 const { appendCookie, clearCookie, setSessionCookie, clearSessionCookie, readCookie } = require('../logic/sessionCookie');
 const { createOAuthState, verifyOAuthState } = require('../logic/oauthState');
 const { createGoogleAuthorizationUrl, verifyGoogleCode } = require('../services/googleOAuthService');
+const { normalizeAndValidateEmail } = require('../logic/emailLogic');
 
 app.use(activityLogMiddleware);
 app.use(clothingApi);
 app.use(outfitApi);
 app.use(collectionApi);
 app.use(calendarApi);
+
+// Prueba pública de normalización y validación de correo
+app.post('/api/prueba/email', (req, res) => {
+  try {
+    const email = normalizeAndValidateEmail(req.body && req.body.email);
+    res.status(200).json({ email });
+  } catch (error) {
+    res.status(statusOf(error, 400)).json({ error: 'EMAIL_INVALIDO' });
+  }
+});
 
 // Perfil del usuario (nombre, usuario, bio, avatar)
 app.get('/api/profile', async (req, res) => {
