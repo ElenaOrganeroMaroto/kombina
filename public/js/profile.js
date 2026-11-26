@@ -132,6 +132,7 @@ const PROFILE_ICONS = {
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
     chevron: '<path d="M6 9l6 6 6-6"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>'
 };
 
@@ -197,6 +198,22 @@ function getOutfitPreviewHTML(outfit) {
         <div class="outfit-preview" style="position: relative;">
             ${buildOutfitCanvasHTML(outfit.items)}
         </div>
+    `;
+}
+
+// Acceso al panel de estadísticas del armario (stats.html)
+function getStatsLinkHTML() {
+    return `
+        <a href="stats.html" class="profile-suggestion-box profile-stats-link" aria-label="Ver estadísticas del armario">
+            <div class="suggestion-icon">${profileIcon('chart')}</div>
+            <div style="flex: 1; min-width: 0;">
+                <div class="suggestion-title-row">
+                    <span class="suggestion-title">Estadísticas</span>
+                </div>
+                <span class="suggestion-desc">Descubre qué prendas usas más y cuáles tienes olvidadas</span>
+            </div>
+            <span style="color: #8c8375; display: flex; transform: rotate(-90deg);">${sizedProfileIcon('chevron', 18)}</span>
+        </a>
     `;
 }
 
@@ -302,6 +319,8 @@ function getMainProfileHTML() {
         <div class="profile-edit-btn-wrap">
             <button type="button" onclick="openEditProfileModal()" class="btn-secondary">Editar perfil</button>
         </div>
+
+        ${getStatsLinkHTML()}
 
         ${getFutureFeaturesHTML()}
         `}
