@@ -31,6 +31,7 @@ const clothingApi = require('./clothingApi');
 const outfitApi = require('./outfitApi');
 const collectionApi = require('./collectionApi');
 const calendarApi = require('./calendarApi');
+const statsApi = require('./statsApi');
 
 const userData = require('../data/userData');
 const profileLogic = require('../logic/profileLogic');
@@ -47,6 +48,7 @@ app.use(clothingApi);
 app.use(outfitApi);
 app.use(collectionApi);
 app.use(calendarApi);
+app.use(statsApi);
 
 // Prueba pública de normalización y validación de correo
 app.post('/api/prueba/email', (req, res) => {

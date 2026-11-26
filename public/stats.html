@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kombina - Estadísticas</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="app-container">
+
+        <!-- Cabecera de marca -->
+        <div class="brand-container">
+            <p class="brand-header">kombina</p>
+        </div>
+
+        <!-- Contenido desplazable -->
+        <div class="content-scroll profile-screen">
+            <div class="profile-subview-header">
+                <a href="profile.html" class="profile-icon-btn" aria-label="Volver al perfil">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                </a>
+                <h2 class="profile-subview-title">Estadísticas</h2>
+                <span></span>
+            </div>
+
+            <!-- Las estadísticas se renderizan aquí -->
+            <div id="statsContent">
+                <div class="grid-empty-message stats-message">Cargando estadísticas…</div>
+            </div>
+        </div>
+
+        <!-- Navegación inferior inyectada por layout.js -->
+        <div id="bottom-nav-container"></div>
+
+    </div>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/stats.js"></script>
+</body>
+</html>
